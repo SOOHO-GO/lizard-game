@@ -464,8 +464,11 @@ function hiss(c, at, dur = 0.3, vol = 0.12) {
   src.start(t);
 }
 
+// 게코가 내는 소리. 자는 동안에는 나지 않는다 (사람이 하는 분무·물 갈기·유리 두드리기 소리는 그대로)
+const GECKO_SOUNDS = new Set(["chirp", "content", "eat", "poop", "grow", "rustle", "catch"]);
 function sfx(name) {
   if (muted) return;
+  if (state.sleeping && GECKO_SOUNDS.has(name)) return;
   const file = soundFiles[name];
   if (file) { file.cloneNode().play().catch(() => {}); return; }
   const c = audioCtx();
@@ -1578,6 +1581,8 @@ function glassKnock(clientX, clientY) {
 // ---- 결로: 습도가 높으면 유리 가장자리부터 김이 서리고 물방울이 맺힌다. 문지르면 닦인다 ----
 // 유리를 FOG_W×FOG_H 칸으로 나눠 칸마다 김의 짙기(0~1)를 기억한다
 const FOG_W = 40, FOG_H = 30;
+const FOG_FILL_SEC = [600, 300]; // [조금 습할 때, 아주 습할 때] 다 서리는 데 걸리는 초
+const FOG_CLEAR_SEC = 180;       // 마른 뒤 걷히는 데 걸리는 초 (대략)
 const fogCells = new Float32Array(FOG_W * FOG_H), fogEdge = new Float32Array(FOG_W * FOG_H);
 for (let y = 0; y < FOG_H; y++) for (let x = 0; x < FOG_W; x++) {
   const e = Math.min(x / (FOG_W - 1), 1 - x / (FOG_W - 1), y / (FOG_H - 1), 1 - y / (FOG_H - 1)); // 0 = 가장자리
@@ -1604,10 +1609,13 @@ function fogFrame(now) {
   const dt = Math.min(0.1, (now - fogLast) / 1000);
   fogLast = now;
   const lvl = fogLevel();
+  // 김이 다 서리는 데 걸리는 시간: 습도가 서리기 시작할 때 10분, 아주 습하면 5분 (닦은 뒤 다시 서릴 때도 같다)
+  const fill = FOG_FILL_SEC[0] - (FOG_FILL_SEC[0] - FOG_FILL_SEC[1]) * lvl;
   let sum = 0;
   for (let i = 0; i < fogCells.length; i++) {
     const t = lvl * fogEdge[i], c = fogCells[i];
-    fogCells[i] = c < t ? Math.min(t, c + dt * 0.03) : Math.max(t, c - dt * 0.06); // 30초쯤 걸려 다시 서린다
+    fogCells[i] = c < t ? Math.min(t, c + dt * t / fill) // 모든 칸이 같은 때에 다 서린다
+      : Math.max(t, c - dt / FOG_CLEAR_SEC); // 건조해지면 천천히 걷힌다
     sum += fogCells[i];
   }
   // 물방울: 김이 짙은 곳에 맺히고, 커지면 주르륵 흘러내리며 길을 낸다
