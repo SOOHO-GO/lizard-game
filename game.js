@@ -1631,8 +1631,9 @@ function drawFog() {
   fctx.imageSmoothingEnabled = true;
   fctx.imageSmoothingQuality = "high";
   fctx.drawImage(fogSmall, 0, 0, w, h);
+  const big = Math.max(1, fogCanvas.clientWidth / 380); // 사육장이 크면 물방울도 크게
   for (const d of fogDrops) {
-    const x = d.x * w, y = d.y * h, r = d.r * dpr;
+    const x = d.x * w, y = d.y * h, r = d.r * dpr * big;
     const g = fctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
     g.addColorStop(0, "rgba(255,255,255,.9)");
     g.addColorStop(0.35, "rgba(220,235,245,.25)");
@@ -1646,7 +1647,7 @@ function drawFog() {
 function wipeFog(x0, y0, x1, y1) {
   const r = fogCanvas.getBoundingClientRect();
   if (!r.width) return;
-  const R = 26; // 문지르는 손가락 굵기(px)
+  const R = 26 * Math.max(1, r.width / 380); // 문지르는 손가락 굵기(px), 사육장이 크면 넓게
   const cw = r.width / FOG_W, ch = r.height / FOG_H;
   const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 6));
   let wiped = 0;

@@ -93,7 +93,7 @@ h1 { margin: 8px 0 12px; font-size: 1.6rem; color: var(--accent);
 @keyframes rub { from { transform: translateX(-3px) rotate(-1.5deg); } to { transform: translateX(3px) rotate(1.5deg); } }
 #pet.walking #petBody { animation: waddle .45s ease-in-out infinite alternate; }
 @keyframes waddle { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(-3px); } }
-#bubble { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(#fff, #f2f2f2); border-radius: 14px; padding: 4px 12px; font-size: .95rem; z-index: 5; min-height: 1.6em; white-space: nowrap;
+#bubble { position: absolute; top: 48px; left: 50%; transform: translateX(-50%); background: linear-gradient(#fff, #f2f2f2); border-radius: 14px; padding: 4px 12px; font-size: .95rem; z-index: 5; min-height: 1.6em; white-space: nowrap;
   box-shadow: inset 0 -2px 0 #0001, 0 3px 0 #0002, 0 6px 12px #0004; }
 #bubble::after { content: ""; position: absolute; left: 50%; bottom: -7px; margin-left: -7px; border: 7px solid transparent; border-bottom: 0; border-top-color: #f2f2f2; }
 /* 응가: 누르면 집게로 집혀 올라가며 사라진다 */
@@ -276,4 +276,47 @@ progress::-moz-progress-bar { border-radius: 999px;
 #muteBtn:active { transform: translateY(2px); box-shadow: 0 1px 0 #2e7d32; }
 #pet { cursor: pointer; touch-action: manipulation; }
 footer { margin-top: 16px; }
+
+/* ---- 가로 화면(태블릿·PC): 왼쪽 절반은 사육장(화면 높이 가득), 오른쪽 절반은 상태 게이지·버튼 ---- */
+@media (min-width: 700px) and (min-aspect-ratio: 1/1) {
+  #app { max-width: none; height: 100vh; height: 100dvh; padding: 16px; overflow-y: auto; display: grid; column-gap: 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* 오른쪽 칸 줄들은 내용만큼, 남는 높이는 마지막 줄이 갖는다 → 사육장이 오른쪽 줄 높이를 늘리지 않는다 */
+    grid-template-rows: repeat(7, min-content) 1fr; align-content: start; }
+  #app > * { grid-column: 2; }
+  #room { grid-column: 1; grid-row: 1 / -1; height: auto; min-height: 0; align-self: stretch; }
+  h1 { margin-top: 0; font-size: 2rem; }
+
+  /* 사육장이 커진 만큼 안의 물건도 키운다 */
+  #lamp { width: 76px; height: 34px; border-radius: 0 0 38px 38px; }
+  #glow { top: 26px; width: 70%; height: 55%; }
+  #thermo { top: 26px; left: 12px; font-size: 1.05rem; padding: 4px 10px; }
+  #bubble { top: 76px; font-size: 1.3rem; padding: 6px 16px; }
+  #dark { top: 70px; font-size: 3rem; }
+  .fx { font-size: 3rem; }
+  .bug { font-size: 3.8rem; }
+  .spray-fx { font-size: 2.4rem; }
+  #poops .poop { font-size: 2.3rem; }
+  #foodPicker { bottom: 24px; padding: 10px; gap: 10px; }
+  #foodPicker button[data-food]:not(.link) { font-size: 1.35rem; padding: 14px 16px; }
+  .knock-fx { border-width: 3px; }
+
+  /* 오른쪽: 게이지 3칸, 버튼 3칸으로 높이를 아낀다 */
+  #stats { grid-template-columns: repeat(3, 1fr); margin: 10px 0 14px; }
+  #stats label { font-size: 1rem; }
+  progress { height: 18px; }
+  #actions { grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  #actions button { font-size: 1.15rem; padding: 16px 6px; }
+  #actions #lampBtn { grid-column: auto; }
+  #actions #mathBtn { grid-column: span 2; }
+}
+/* 가로 화면인데 높이가 낮은 기기(휴대폰 가로): 오른쪽을 더 촘촘하게 */
+@media (min-width: 700px) and (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  h1 { font-size: 1.4rem; margin-bottom: 6px; }
+  #stats { gap: 6px; margin: 6px 0 10px; }
+  #stats label { padding: 5px 8px 7px; font-size: .85rem; }
+  progress { height: 12px; margin-top: 3px; }
+  #actions { gap: 8px; }
+  #actions button { padding: 9px 4px; font-size: 1rem; }
+}
 .link { background: none; border: 0; color: #6a8a6b; text-decoration: underline; cursor: pointer; }
