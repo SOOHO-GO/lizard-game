@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2f6b4f">
+  <title>도마뱀 키우기</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div>
+        <h1 id="name">도마뱀 키우기</h1>
+        <div id="sub" class="sub"></div>
+      </div>
+      <div id="clock" class="clock"></div>
+    </header>
+
+    <div class="tank-wrap">
+      <canvas id="tank"></canvas>
+      <div id="status" class="status"></div>
+    </div>
+
+    <section class="stats">
+      <div class="stat"><span>🍖 배부름</span><div class="bar"><i id="b-hunger"></i></div></div>
+      <div class="stat"><span>😊 기분</span><div class="bar"><i id="b-mood"></i></div></div>
+      <div class="stat"><span>🧽 청결</span><div class="bar"><i id="b-clean"></i></div></div>
+      <div class="stat"><span>❤️ 건강</span><div class="bar"><i id="b-health"></i></div></div>
+      <div class="env"><span id="temp">🌡️ --</span><span id="hum">💧 --</span></div>
+    </section>
+
+    <section class="actions">
+      <button data-act="feed">🦗<b>먹이</b></button>
+      <button data-act="mist">💦<b>분무</b></button>
+      <button data-act="clean">🧹<b>청소</b></button>
+      <button data-act="heater" id="heater-btn">🔥<b id="heater-label">히터</b></button>
+      <button data-act="vet" id="vet-btn">💊<b>병원</b></button>
+    </section>
+
+    <footer>
+      <span>v<span id="ver"></span></span>
+      <button id="reset" class="link">처음부터</button>
+    </footer>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="dialog" class="dialog hidden">
+    <div class="card">
+      <h2>알이 부화했어요! 🎉</h2>
+      <p>이름을 지어주세요</p>
+      <input id="name-input" maxlength="10" placeholder="예: 망고" autocomplete="off">
+      <button id="name-ok">좋아요</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
