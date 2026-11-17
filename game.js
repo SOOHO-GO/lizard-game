@@ -1881,7 +1881,13 @@ function endHunt() {
 }
 
 // ---- 숨바꼭질: 게코가 돌·통나무·화분 중 하나에 숨고 자리가 섞인다. 맞히면 더 빨리 섞는다 ----
-const HIDE_SPOTS = ["🪨", "🪵", "🪴"], HIDE_XS = [20, 50, 80], HIDE_ROUNDS = 3;
+// 숨는 곳은 셋 다 똑같은 바위 동굴이어야 한다 (모양이 다르면 섞어도 어디 있는지 외워 버린다)
+const HIDE_XS = [20, 50, 80], HIDE_ROUNDS = 3;
+const SPOT_SVG = `<svg viewBox="0 0 140 80" aria-hidden="true">
+  <defs><linearGradient id="spotG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a08b76"/><stop offset="1" stop-color="#5a4a3c"/></linearGradient></defs>
+  <path d="M3 80C1 54 12 32 32 21 48 11 66 6 84 9c23 4 41 18 49 38 5 12 6 22 6 33z" fill="url(#spotG)" stroke="#45382c" stroke-width="1.5"/>
+  <path d="M22 42c10-15 26-23 44-25M98 22c10 4 18 12 22 21" stroke="#cdb9a1" stroke-width="3.5" stroke-linecap="round" fill="none" opacity=".55"/>
+  <path d="M44 80c0-23 11-35 26-35s27 12 27 35z" fill="#1c140e"/></svg>`;
 let hideGame = null;
 const spotX = (el) => parseFloat(el.style.left);
 const petXAt = (x) => Math.max(PET_MIN_X, Math.min(PET_MAX_X, x - 27.5)); // 그 자리 위에 게코 몸 가운데가 오게
@@ -1889,8 +1895,9 @@ const petXAt = (x) => Math.max(PET_MIN_X, Math.min(PET_MAX_X, x - 27.5)); // 그
 function startHide() {
   busy = true;
   stopWalk();
-  const spots = HIDE_SPOTS.map((icon, i) => {
-    const el = spawn("hide-spot", icon, HIDE_XS[i], 84);
+  const spots = HIDE_XS.map((x) => {
+    const el = spawn("hide-spot", "", x, 84);
+    el.innerHTML = SPOT_SVG;
     el.addEventListener("pointerdown", (e) => { e.stopPropagation(); pickSpot(el); });
     return el;
   });
