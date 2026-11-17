@@ -27,7 +27,7 @@
   <section id="room">
     <div id="lid"></div>
     <div id="lamp"><div id="glow"></div></div>
-    <div id="thermo">🌡️ <span id="temp">31°C</span></div>
+    <div id="thermo">🌡️ <span id="temp">31°C</span> · 💦 <span id="humid">45%</span></div>
     <div id="decor">
       <svg class="d-plant" viewBox="0 0 60 100" aria-hidden="true">
         <path d="M30 100C28 70 10 60 4 40c14 6 22 22 26 40C30 50 22 25 30 0c8 25 0 50 0 80 4-18 12-34 26-40-6 20-24 30-26 60z" fill="#5f9e4f"/>
@@ -46,8 +46,18 @@
     </div>
     <div id="bubble"></div>
     <div id="pet">
-      <svg id="lizard" viewBox="0 0 200 140" preserveAspectRatio="xMidYMax meet" role="img" aria-label="도마뱀"></svg>
-      <img id="petImg" alt="도마뱀" style="display:none">
+      <div id="petBody">
+        <svg id="lizard" viewBox="0 0 200 140" preserveAspectRatio="xMidYMax meet" role="img" aria-label="도마뱀"></svg>
+        <img id="petImg" alt="도마뱀" style="display:none" draggable="false">
+        <!-- 그림 위에 겹치는 혀·눈꺼풀. 좌표는 그림 기준 0~100 (그림과 똑같이 맞춰진다) -->
+        <svg id="petFx" viewBox="0 0 100 100" preserveAspectRatio="xMidYMax meet" aria-hidden="true" style="display:none">
+          <path id="tongue" d="M0 0" fill="none" stroke="#e46f86" stroke-width="2.2" stroke-linecap="round"/>
+          <g id="lids">
+            <ellipse id="lid1" class="lid" rx="0" ry="0"/><path id="lidLine1" class="lid-line" d="M0 0"/>
+            <ellipse id="lid2" class="lid" rx="0" ry="0"/><path id="lidLine2" class="lid-line" d="M0 0"/>
+          </g>
+        </svg>
+      </div>
     </div>
     <div id="poops"></div>
     <div id="dark" hidden>💤</div>
@@ -57,7 +67,9 @@
       <button data-food="silk" id="silkBtn" style="display:none">🪱 누에 <small id="silkCount"></small></button>
       <button data-food="" class="link">그만두기</button>
     </div>
+    <div id="ambient"></div>
     <div id="glass"></div>
+    <canvas id="fog"></canvas>
   </section>
 
   <section id="stats">
@@ -65,7 +77,8 @@
     <label>😊 행복<progress id="s-happy" max="100"></progress></label>
     <label>⚡ 에너지<progress id="s-energy" max="100"></progress></label>
     <label>🧹 깨끗함<progress id="s-clean" max="100"></progress></label>
-    <label class="wide">💧 물<progress id="s-water" max="100"></progress></label>
+    <label>💧 물<progress id="s-water" max="100"></progress></label>
+    <label>💦 습도<progress id="s-humid" max="100"></progress></label>
     <label class="wide">🌱 <span id="growLabel">성장</span> <small id="growLeft"></small><progress id="s-grow" max="100"></progress></label>
   </section>
 
@@ -75,6 +88,7 @@
     <button data-act="sleep" id="sleepBtn">🌙 재우기</button>
     <button data-act="clean">🧹 청소하기</button>
     <button data-act="water">💧 물 갈기</button>
+    <button data-act="mist" id="mistBtn">💦 분무하기</button>
     <button id="lampBtn">🔥 히팅램프 끄기</button>
     <button id="mathBtn">✏️ 수학 미션 <small id="mathLeft"></small></button>
   </section>
@@ -136,9 +150,11 @@
     <div id="testInfo"></div>
     <button data-skip="60">⏩ 1시간 건너뛰기</button>
     <button data-skip="480">⏩ 8시간 건너뛰기</button>
+    <button id="testShed">🦎 탈피 시작 (하얘짐)</button>
+    <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.3.0</small></footer>
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.4.0</small></footer>
 </main>
 <script src="game.js"></script>
 <script>

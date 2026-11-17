@@ -46,6 +46,13 @@ const TEMP_EFFECT = {
   hot: { hunger: 1, happy: 1.5, energy: 2, clean: 1, rest: 0.5 },
 };
 const NO_EFFECT = { hunger: 1, happy: 1, energy: 1, clean: 1, rest: 1 };
+// 습도: 분무하면 오르고, 시간이 지나면 방 습도 쪽으로 내려간다 (램프를 켜 두면 더 건조).
+// 레오파드 게코는 평소 30~60%면 충분하고, 허물 벗을 때는 60% 이상 촉촉해야 잘 벗는다.
+const HUMID_RATE = 0.012, HUMID_DRY = { lampOn: 30, lampOff: 40 };
+const MIST_UP = 30, WATER_HUMID_UP = 8, TOO_HUMID = 85;
+// 탈피: 다음 성장 단계까지 SHED_AT% 오면 몸이 하얘지고(탈피 직전),
+// 습도 SHED_HUMID% 이상인 시간이 SHED_WET_MIN분 쌓이면 허물을 벗는다.
+const SHED_AT = 80, SHED_HUMID = 60, SHED_WET_MIN = 30;
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -56,6 +63,7 @@ function newState() {
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
            temp: 29, lampOn: true, mathGrade: 2, mathDay: "", mathClears: 0,
            mathSkill: {}, mathWrong: [], treats: 0,
+           humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            gen: 1, history: [], born: now, last: now };
 }
 
@@ -149,7 +157,25 @@ function step(min, f) {
     state.poopCount = Math.min(MAX_POOP, state.poopCount + 1);
   }
   state.clean = clamp(state.clean - POOP_DIRT * state.poopCount * f * min);
+  const dry = state.lampOn ? HUMID_DRY.lampOn : HUMID_DRY.lampOff;
+  state.humidity = clamp(state.humidity + (dry - state.humidity) * (1 - Math.exp(-HUMID_RATE * min)));
+  stepShed(min);
 }
+
+function stepShed(min) {
+  if (stage().key === "egg") return;
+  const next = nextGoal();
+  if (state.shedPhase !== "pre" && state.shedPhase !== "ready" && state.shedFor !== next.key && growth() >= SHED_AT) {
+    state.shedPhase = "pre";
+    state.shedFor = next.key;
+    state.shedWet = 0;
+  }
+  if (state.shedPhase === "pre") {
+    if (state.humidity >= SHED_HUMID) state.shedWet += min;
+    if (state.shedWet >= SHED_WET_MIN) state.shedPhase = "ready";
+  }
+}
+const shedding = () => state.shedPhase === "pre" || state.shedPhase === "ready";
 
 function tick() {
   const now = Date.now();
@@ -160,13 +186,18 @@ function tick() {
   state.last = now;
   if (min > 0) advance(min, !online);
   if (state.careMin >= LAY_GOAL.care && !busy) return layEgg();
+  // 꺼 둔 사이에 허물 벗을 준비가 끝났으면, 그 사이에 벗고 먹은 것으로 친다
+  let shedAway = false;
+  if (!online && state.shedPhase === "ready") { state.shedPhase = "done"; shedAway = true; }
   save();
   render();
   const after = stage();
   if (after !== before) { sfx("grow"); say(`와! ${after.name}로 자랐어요!`); }
+  else if (shedAway) say("없는 동안 허물을 벗고 냠냠 먹었어요! ✨");
   // 켜 둔 동안 생긴 일만 소리를 낸다 (다시 열었을 때 한꺼번에 울리지 않게)
   else if (online && state.poopCount > hadPoop) sfx("poop");
   else if (online && wasSleeping && !state.sleeping) sfx("wake");
+  maybeShed();
 }
 
 function stage() {
@@ -190,6 +221,9 @@ function mood() {
   if (z === "cold") return { face: "sad", text: "추워요... 램프를 켜주세요" };
   if (z === "hot") return { face: "sad", text: "더워요! 램프를 꺼주세요" };
   if (thirsty()) return { face: "sad", text: "목말라요... 물을 갈아주세요" };
+  if (state.humidity > TOO_HUMID) return { face: "sad", text: "너무 축축해요... 램프로 말려 주세요" };
+  if (state.shedPhase === "pre" && state.humidity < SHED_HUMID) return { face: "ok", text: "허물 벗을 때예요! 💦 분무해 주세요" };
+  if (state.shedPhase === "pre") return { face: "ok", text: "촉촉해서 허물이 들뜨고 있어요..." };
   if (state.hunger < 25) return { face: "sad", text: "배고파요..." };
   if (state.clean < 25) return { face: "sad", text: "사육장이 더러워요..." };
   if (state.energy < 25) return { face: "sad", text: "졸려요..." };
@@ -202,22 +236,50 @@ function mood() {
 // ---- 그리기 ----
 // 이미지가 있으면 이미지를 쓰고, 없으면 아래 SVG 그림으로 대신한다.
 // 찾는 순서: <단계>_<동작>.png → <단계>_<기분>.png → <단계>.png → SVG
+// 그림 속 눈·입 위치 (그림 기준 0~100). 모든 그림이 머리가 오른쪽이라 단계별로 거의 같다.
+// eye: [x, y, 반지름], eye2: 건너편 눈(보이는 경우), mouth: 혀가 나오는 입 앞쪽
+const HEAD = {
+  hatchling: { eye: [75.8, 38.3, 4.3], mouth: [85.5, 42.8] },
+  juvenile: { eye: [76.2, 38.5, 4.3], mouth: [85.5, 43] },
+  adult: { eye: [77.5, 37.1, 3.7], eye2: [89.2, 34.9, 1.8], mouth: [86.5, 41.5] },
+};
+const HEAD_SAD = { adult: { eye: [79.7, 39.7, 3.4], mouth: [88.5, 44] } };
+let head = null; // 지금 보이는 그림의 머리 위치 (그림이 없거나 잘 때는 null)
+
+function placeHead(st, face) {
+  head = face === "sleep" || !HEAD[st.key] ? null : (face === "sad" && HEAD_SAD[st.key]) || HEAD[st.key];
+  if (!head) return;
+  const lid = (n, e) => {
+    const el = $("lid" + n), line = $("lidLine" + n);
+    if (!e) { el.setAttribute("rx", 0); line.setAttribute("d", "M0 0"); return; }
+    const [x, y, r] = e;
+    el.setAttribute("cx", x); el.setAttribute("cy", y);
+    el.setAttribute("rx", (r * 1.25).toFixed(2)); el.setAttribute("ry", (r * 1.15).toFixed(2));
+    line.setAttribute("d", `M${x - r * 1.05} ${y + r * 0.15}Q${x} ${y + r * 0.85} ${x + r * 1.05} ${y + r * 0.15}`);
+  };
+  lid(1, head.eye);
+  lid(2, head.eye2);
+}
+
 let shownKey = "";
 function renderPet(st, faces, svgFace) {
   const key = st.key + "_" + faces.join("+");
   if (key === shownKey) return; // 바뀐 게 없으면 다시 불러오지 않는다
   shownKey = key;
-  const img = $("petImg"), svg = $("lizard");
+  const img = $("petImg"), svg = $("lizard"), fx = $("petFx");
   svg.innerHTML = lizardSvg(st, svgFace);
+  placeHead(st, faces[faces.length - 1]);
   const tries = faces.map((f) => IMG_DIR + st.key + "_" + f + ".png").concat(IMG_DIR + st.key + ".png");
   (function next(i) {
-    if (i >= tries.length) { img.style.display = "none"; svg.style.display = ""; return; }
+    if (i >= tries.length) { img.style.display = "none"; svg.style.display = ""; fx.style.display = "none"; head = null; return; }
     const probe = new Image();
     probe.onload = () => {
       if (shownKey !== key) return;
       img.src = probe.src;
       img.style.display = "";
       svg.style.display = "none";
+      fx.style.display = head ? "" : "none";
+      if (head) tintLids(probe);
     };
     probe.onerror = () => { if (shownKey === key) next(i + 1); };
     probe.src = tries[i];
@@ -277,7 +339,9 @@ function render() {
     $("testInfo").textContent = `성장 ${fmtMin(state.careMin)} / 다음 목표 ${fmtMin(next.care)}`
       + ` · 평균 ${Math.round(careAvg())} · ${state.temp.toFixed(1)}°C`;
   }
-  renderPet(st, action ? [action, m.face] : [m.face], action ? "happy" : m.face);
+  // 쓰다듬는 동안은 행복한 얼굴 그림 위에 눈꺼풀을 덮는다
+  renderPet(st, petting ? ["happy"] : action ? [action, m.face] : [m.face], petting || action ? "happy" : m.face);
+  $("pet").classList.toggle("pale", shedding() && st.key !== "egg");
   $("room").dataset.action = action || "";
   $("app").classList.toggle("busy", busy);
   $("lizard").classList.toggle("sleeping", state.sleeping);
@@ -291,6 +355,8 @@ function render() {
   $("mathLeft").textContent = `오늘 🦴 ${mathLeft()}/${MATH_DAILY}` + (state.treats ? ` · 🪱 ${state.treats}` : "")
     + (dueReviews().length ? ` · 📒 복습 ${dueReviews().length}` : "");
   if (document.activeElement !== $("nameInput")) $("nameInput").value = state.name;
+  renderLight();
+  fogKick();
 }
 
 // ---- 소리 ----
@@ -364,7 +430,32 @@ const SYNTH = {
   },
   poop: (c) => tone(c, 0, 320, 0.18, { to: 90, vol: 0.18 }),
   lamp: (c) => { tone(c, 0, 1400, 0.03, { type: "square", vol: 0.06 }); tone(c, 0.05, 900, 0.03, { type: "square", vol: 0.05 }); },
+  // 분무기 "칙칙"
+  mist: (c) => { hiss(c, 0); hiss(c, 0.36); },
+  // 유리를 두드리는 둔탁한 "톡" + 아주 작은 유리 울림
+  knock: (c) => { tone(c, 0, 170, 0.11, { to: 70, vol: 0.35 }); tone(c, 0, 2600, 0.12, { vol: 0.012 }); },
+  // 김 서린 유리를 문지르는 "뽀득"
+  squeak: (c) => tone(c, 0, 1100 + Math.random() * 500, 0.06, { type: "triangle", vol: 0.035, to: 1600 }),
+  // 쓰다듬을 때 기분 좋은 낮은 소리
+  content: (c) => notes(c, [392, 330], 0.22, { vol: 0.06 }),
+  // 허물 벗는 바스락 소리
+  rustle: (c) => { for (let i = 0; i < 6; i++) crunch(c, i * 0.16, 0.05, 0.07); },
 };
+
+// 칙 소리: 높은 음역만 남긴 짧은 잡음
+function hiss(c, at, dur = 0.3, vol = 0.12) {
+  const t = c.currentTime + at;
+  const buf = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.5);
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  src.buffer = buf;
+  f.type = "highpass";
+  f.frequency.value = 2500;
+  g.gain.value = vol;
+  src.connect(f).connect(g).connect(c.destination);
+  src.start(t);
+}
 
 function sfx(name) {
   if (muted) return;
@@ -456,6 +547,7 @@ const randX = () => PET_MIN_X + Math.random() * (PET_MAX_X - PET_MIN_X);
 // 몇 초마다 다음 행동을 고른다. 레오파드 게코는 천천히 걷다가 자주 멈춰 쉰다.
 function wander() {
   clearTimeout(wanderTimer);
+  if (petting) { wanderTimer = setTimeout(wander, 1500); return; } // 쓰다듬는 동안은 가만히
   let sec = 0, pause = 1500 + Math.random() * 3500;
   if (stage().key === "egg") {
     if (petX !== PET_CENTER_X) placeAt(PET_CENTER_X);
@@ -639,6 +731,7 @@ function changeWater() {
   tick();
   sfx("water");
   state.water = 100;
+  state.humidity = clamp(state.humidity + WATER_HUMID_UP);
   state.happy = clamp(state.happy + 3);
   sparkle(4, 85, 88, 14);
   say("시원한 새 물이에요!");
@@ -689,9 +782,23 @@ const ACTIONS = {
     say(!state.sleeping ? "안녕! 잘 잤어요" : state.lampOn ? "잘 자요~ 램프를 끄면 더 잘 자요" : "잘 자요~");
     wander();
   },
-  // 청소와 물 갈기는 게코가 자는 동안에도 할 수 있다
+  // 청소와 물 갈기, 분무는 게코가 자는 동안에도 할 수 있다
   clean() { startCleaning(); },
   water() { changeWater(); },
+  mist() {
+    sfx("mist");
+    state.humidity = clamp(state.humidity + MIST_UP);
+    for (let i = 0; i < 7; i++) {
+      const s = spawn("spray-fx", "💧", 15 + Math.random() * 70, 18 + Math.random() * 20);
+      s.style.setProperty("--dx", (Math.random() * 30 - 15).toFixed(0) + "px");
+      s.style.animationDelay = (i * 60) + "ms";
+      setTimeout(() => s.remove(), 1400);
+    }
+    say(state.humidity > TOO_HUMID ? "너무 축축해요! 조금만 뿌려요"
+      : state.shedPhase === "pre" ? "촉촉! 허물이 잘 벗겨지겠어요"
+      : "칙칙! 사육장이 촉촉해졌어요");
+    render();
+  },
 };
 
 let sayTimer;
@@ -714,6 +821,8 @@ const TEMP_WORD = { cold: "추워요", ok: "", good: "딱 좋아요", hot: "더�
 function renderTemp() {
   const z = tempZone();
   $("temp").textContent = Math.round(state.temp) + "°C" + (TEMP_WORD[z] ? " " + TEMP_WORD[z] : "");
+  $("humid").textContent = Math.round(state.humidity) + "%";
+  $("s-humid").value = state.humidity;
   $("thermo").dataset.zone = z;
   $("room").classList.toggle("lamp-off", !state.lampOn);
   $("lampBtn").textContent = state.lampOn ? "🔥 히팅램프 끄기" : "💡 히팅램프 켜기";
@@ -738,10 +847,10 @@ document.querySelectorAll("[data-act]").forEach((b) =>
     ACTIONS[b.dataset.act]();
   }));
 
-// 게코를 톡 건드리면 "끽끽" 하고 반응한다
+// 게코를 톡 건드리면 "끽끽" 하고 반응한다. 머리를 길게 누르면 쓰다듬기 (아래 쓰다듬기 부분)
 const PET_TALK = ["끽끽!", "간지러워요!", "안녕! 반가워요", "또 만져줘요!"];
 let lastPetTap = 0;
-$("pet").addEventListener("pointerdown", () => {
+function tapPet() {
   const now = Date.now();
   if (busy || now - lastPetTap < 800) return;
   lastPetTap = now;
@@ -750,7 +859,8 @@ $("pet").addEventListener("pointerdown", () => {
   sfx("chirp");
   state.happy = clamp(state.happy + 2);
   say(PET_TALK[Math.floor(Math.random() * PET_TALK.length)]);
-});
+  if (Math.random() < 0.5) setTimeout(flickTongue, 250);
+}
 
 function renderMute() {
   $("muteBtn").textContent = muted ? "🔇" : "🔊";
@@ -1177,7 +1287,7 @@ function layEgg() {
     history: state.history.concat(parent), gen: state.gen + 1, name: babyName(state.name, state.gen + 1),
     mathGrade: state.mathGrade, mathDay: state.mathDay, mathClears: state.mathClears,
     mathSkill: state.mathSkill, mathWrong: state.mathWrong, treats: state.treats, // 아이의 실력은 이어진다
-    lampOn: state.lampOn, temp: state.temp, water: state.water,
+    lampOn: state.lampOn, temp: state.temp, water: state.water, humidity: state.humidity,
   };
   state = Object.assign(newState(), keep);
   save();
@@ -1272,6 +1382,381 @@ function fmtLeft(m) {
 function fmtMin(m) {
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = Math.floor(m % 60);
   return (d ? d + "일 " : "") + (d || h ? h + "시간 " : "") + mm + "분";
+}
+
+// ================= 살아있는 사육장 =================
+
+// ---- 실제 시간에 따른 조명: 새벽 / 낮(햇살) / 해질녘 / 밤(나이트 글로 램프) ----
+function timeOfDay(d = new Date()) {
+  const h = d.getHours() + d.getMinutes() / 60;
+  return h >= 6 && h < 8 ? "dawn" : h >= 8 && h < 17 ? "day" : h >= 17 && h < 19.5 ? "dusk" : "night";
+}
+function renderLight() {
+  const tod = timeOfDay();
+  if (document.body.dataset.tod !== tod) document.body.dataset.tod = tod;
+}
+
+// ---- 그림 좌표(0~100) ↔ 화면 좌표. 왼쪽을 보고 있으면 좌우가 뒤집힌다 ----
+function petBox() {
+  const r = $("petBody").getBoundingClientRect();
+  const size = Math.min(r.width, r.height);
+  return { left: r.left + (r.width - size) / 2, top: r.bottom - size, size };
+}
+function toImg(clientX, clientY) {
+  const b = petBox();
+  const u = (clientX - b.left) / b.size * 100;
+  return [facing < 0 ? 100 - u : u, (clientY - b.top) / b.size * 100];
+}
+function imgToRoom(u, v) {
+  const b = petBox(), room = $("room").getBoundingClientRect();
+  const x = b.left + (facing < 0 ? 100 - u : u) / 100 * b.size, y = b.top + v / 100 * b.size;
+  return [(x - room.left) / room.width * 100, (y - room.top) / room.height * 100];
+}
+
+// ---- 혀 날름 / 혀로 눈 핥기 (레오파드 게코는 혀로 눈을 닦는다) ----
+let petting = false;
+function canFidget() {
+  return head && !state.sleeping && !busy && !action && !petting && stage().key !== "egg"
+    && !$("pet").classList.contains("walking") && $("petFx").style.display !== "none" && !document.hidden;
+}
+function animTongue(d, dur, hold) {
+  const t = $("tongue");
+  t.setAttribute("d", d);
+  const L = t.getTotalLength();
+  if (!L || !t.animate) return;
+  t.style.strokeDasharray = `${L} ${L}`;
+  t.style.strokeDashoffset = L;
+  t.animate([{ strokeDashoffset: L }, { strokeDashoffset: 0, offset: 0.4 }, { strokeDashoffset: 0, offset: 0.4 + hold },
+    { strokeDashoffset: L }], { duration: dur, easing: "ease-in-out" });
+}
+function flickTongue() {
+  if (!head || petting || state.sleeping) return;
+  const [mx, my] = head.mouth;
+  animTongue(`M${mx} ${my}l5 .6`, 380, 0.05);
+}
+function lickEye() {
+  const [mx, my] = head.mouth, [ex, ey, r] = head.eye;
+  animTongue(`M${mx} ${my}Q${mx + 7} ${ey - 2} ${ex + r * 0.5} ${ey - r * 0.3}`, 1100, 0.15);
+}
+(function fidget() {
+  setTimeout(() => { if (canFidget()) (Math.random() < 0.55 ? lickEye : flickTongue)(); fidget(); }, 6000 + Math.random() * 12000);
+})();
+
+// 눈꺼풀 색: 그림에서 눈 둘레 피부색을 뽑아 쓴다 (검은 점무늬는 뺀다)
+const lidColors = {};
+function tintLids(img) {
+  const apply = (c) => document.querySelectorAll("#lids .lid").forEach((e) => e.setAttribute("fill", c));
+  if (lidColors[img.src]) return apply(lidColors[img.src]);
+  apply("#efcf6a");
+  try {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 100;
+    const cx = cv.getContext("2d");
+    cx.drawImage(img, 0, 0, 100, 100);
+    const [ex, ey, r] = head.eye;
+    let n = 0, R = 0, G = 0, B = 0;
+    for (let a = 0; a < 16; a++) {
+      const ang = a / 16 * Math.PI * 2;
+      const p = cx.getImageData(Math.round(ex + Math.cos(ang) * r * 1.8), Math.round(ey + Math.sin(ang) * r * 1.8), 1, 1).data;
+      if (p[3] > 200 && p[0] + p[1] + p[2] > 360) { R += p[0]; G += p[1]; B += p[2]; n++; }
+    }
+    if (n) { lidColors[img.src] = `rgb(${(R / n) | 0},${(G / n) | 0},${(B / n) | 0})`; apply(lidColors[img.src]); }
+  } catch (e) { /* 그림을 읽을 수 없으면 기본색 */ }
+}
+
+// ---- 쓰다듬기: 머리를 길게 누르면 눈을 지그시 감고 턱을 바닥에 댄다 ----
+const PET_HOLD_MS = 450;
+let press = null, pressTimer, petTick, petGain = 0;
+function isHead(e) {
+  if (!head || state.sleeping || stage().key === "egg") return false;
+  const [u, v] = toImg(e.clientX, e.clientY);
+  return u > head.eye[0] - 15 && v > head.eye[1] - 18 && v < head.eye[1] + 16;
+}
+function startPetting() {
+  if (busy || action || state.sleeping || stage().key === "egg" || !head) return;
+  petting = true;
+  stopWalk();
+  $("pet").classList.add("petting");
+  shownKey = "";
+  render();
+  sfx("content");
+  say("스르르... 기분 좋아요 😌");
+  petTick = setInterval(() => {
+    if (!head) return;
+    const [x, y] = imgToRoom(head.eye[0], head.eye[1] - 14);
+    const h = spawn("rise-fx", "💗", x + Math.random() * 8 - 4, y);
+    setTimeout(() => h.remove(), 1800);
+    if (petGain < 10) { state.happy = clamp(state.happy + 1); petGain++; renderBars(); }
+  }, 700);
+}
+function endPetting() {
+  petting = false;
+  clearInterval(petTick);
+  petGain = 0;
+  $("pet").classList.remove("petting");
+  save();
+  shownKey = "";
+  render();
+  clearTimeout(wanderTimer);
+  wanderTimer = setTimeout(wander, 1500);
+}
+const petEl = $("pet");
+petEl.addEventListener("contextmenu", (e) => e.preventDefault()); // 길게 누를 때 메뉴가 뜨지 않게
+petEl.addEventListener("pointerdown", (e) => {
+  press = { x: e.clientX, y: e.clientY, t: Date.now(), head: isHead(e) };
+  try { petEl.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { if (press && press.head) startPetting(); }, PET_HOLD_MS);
+});
+petEl.addEventListener("pointermove", (e) => {
+  if (press && !petting && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 12) press.head = false;
+});
+function endPress(cancelled) {
+  if (!press) return;
+  clearTimeout(pressTimer);
+  const p = press;
+  press = null;
+  if (petting) return endPetting();
+  if (!cancelled && Date.now() - p.t < PET_HOLD_MS) tapPet();
+}
+petEl.addEventListener("pointerup", () => endPress(false));
+petEl.addEventListener("pointercancel", () => endPress(true));
+
+// ---- 유리 두드리기: 둔탁한 소리 + 파문, 게코가 그쪽을 쳐다본다 ----
+let knocks = [], lookTimer;
+function glassKnock(clientX, clientY) {
+  const room = $("room").getBoundingClientRect();
+  const x = (clientX - room.left) / room.width * 100, y = (clientY - room.top) / room.height * 100;
+  sfx("knock");
+  const fx = spawn("knock-fx", "", x, y);
+  setTimeout(() => fx.remove(), 600);
+  const now = Date.now();
+  knocks = knocks.filter((t) => now - t < 5000);
+  knocks.push(now);
+  if (stage().key === "egg") return;
+  if (state.sleeping) return say("쿨쿨... (유리 소리에 뒤척여요)");
+  if (busy || action || petting) return;
+  // 진짜 파충류도 유리를 자꾸 두드리면 스트레스를 받는다
+  if (knocks.length >= 4) {
+    knocks = [];
+    state.happy = clamp(state.happy - 3);
+    say("유리를 자꾸 두드리면 깜짝 놀라요! 😣");
+    const sec = walkTo(HIDE_X, 14);
+    clearTimeout(wanderTimer);
+    wanderTimer = setTimeout(wander, sec * 1000 + 3000);
+    return;
+  }
+  stopWalk();
+  facing = x > petX + 27.5 ? 1 : -1; // #pet 너비 55%의 가운데 기준
+  $("pet").style.setProperty("--face", facing);
+  $("pet").classList.add("look");
+  clearTimeout(lookTimer);
+  lookTimer = setTimeout(() => $("pet").classList.remove("look"), 1400);
+  if (Math.random() < 0.6) setTimeout(flickTongue, 350);
+  clearTimeout(wanderTimer);
+  wanderTimer = setTimeout(wander, 2500);
+}
+
+// ---- 결로: 습도가 높으면 유리 가장자리부터 김이 서리고 물방울이 맺힌다. 문지르면 닦인다 ----
+// 유리를 FOG_W×FOG_H 칸으로 나눠 칸마다 김의 짙기(0~1)를 기억한다
+const FOG_W = 40, FOG_H = 30;
+const fogCells = new Float32Array(FOG_W * FOG_H), fogEdge = new Float32Array(FOG_W * FOG_H);
+for (let y = 0; y < FOG_H; y++) for (let x = 0; x < FOG_W; x++) {
+  const e = Math.min(x / (FOG_W - 1), 1 - x / (FOG_W - 1), y / (FOG_H - 1), 1 - y / (FOG_H - 1)); // 0 = 가장자리
+  const t = Math.min(1, e / 0.32);
+  fogEdge[y * FOG_W + x] = 0.25 + 0.75 * (1 - t * t * (3 - 2 * t)); // 가장자리일수록 짙게
+}
+const fogCanvas = $("fog"), fctx = fogCanvas.getContext("2d");
+const fogSmall = document.createElement("canvas");
+fogSmall.width = FOG_W;
+fogSmall.height = FOG_H;
+const sctx = fogSmall.getContext("2d"), fogImg = sctx.createImageData(FOG_W, FOG_H);
+let fogDrops = [], fogRAF = 0, fogLast = 0, wipedSum = 0, wipeCheered = false, lastSqueak = 0;
+const fogLevel = () => Math.max(0, Math.min(1, (state.humidity - 55) / 35)); // 습도 55%부터 서리기 시작
+const cellAt = (x, y) => {
+  const cx = Math.floor(x * FOG_W), cy = Math.floor(y * FOG_H);
+  return cx < 0 || cy < 0 || cx >= FOG_W || cy >= FOG_H ? -1 : cy * FOG_W + cx;
+};
+
+function fogKick() {
+  if (!fogRAF && !document.hidden) { fogLast = performance.now(); fogRAF = requestAnimationFrame(fogFrame); }
+}
+function fogFrame(now) {
+  fogRAF = 0;
+  const dt = Math.min(0.1, (now - fogLast) / 1000);
+  fogLast = now;
+  const lvl = fogLevel();
+  let sum = 0;
+  for (let i = 0; i < fogCells.length; i++) {
+    const t = lvl * fogEdge[i], c = fogCells[i];
+    fogCells[i] = c < t ? Math.min(t, c + dt * 0.03) : Math.max(t, c - dt * 0.06); // 30초쯤 걸려 다시 서린다
+    sum += fogCells[i];
+  }
+  // 물방울: 김이 짙은 곳에 맺히고, 커지면 주르륵 흘러내리며 길을 낸다
+  if (lvl > 0.15 && fogDrops.length < 45 && Math.random() < dt * lvl * 3) {
+    const i = Math.floor(Math.random() * fogCells.length);
+    if (fogCells[i] > 0.45) {
+      fogDrops.push({ x: (i % FOG_W + Math.random()) / FOG_W, y: (Math.floor(i / FOG_W) + Math.random()) / FOG_H,
+        r: 1.5 + Math.random() * 2.5, vy: 0 });
+    }
+  }
+  for (const d of fogDrops) {
+    if (d.vy === 0 && lvl > 0.3) d.r += dt * 0.15 * lvl;
+    if (d.r >= 5) {
+      d.vy = Math.min(0.12, d.vy + dt * 0.05);
+      d.y += d.vy * dt;
+      d.r -= dt * 0.25;
+      const ci = cellAt(d.x, d.y);
+      if (ci >= 0) fogCells[ci] *= 0.6;
+    }
+  }
+  fogDrops = fogDrops.filter((d) => d.y < 1 && d.r > 1.2 && (d.vy > 0 || fogCells[cellAt(d.x, d.y)] > 0.12));
+  drawFog();
+  $("room").classList.toggle("foggy", sum > 20);
+  if (sum > 0.5 || lvl > 0 || fogDrops.length) fogRAF = requestAnimationFrame(fogFrame);
+  else { fctx.clearRect(0, 0, fogCanvas.width, fogCanvas.height); wipeCheered = false; wipedSum = 0; }
+}
+function drawFog() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(fogCanvas.clientWidth * dpr), h = Math.round(fogCanvas.clientHeight * dpr);
+  if (!w || !h) return;
+  if (fogCanvas.width !== w || fogCanvas.height !== h) { fogCanvas.width = w; fogCanvas.height = h; }
+  const px = fogImg.data;
+  for (let i = 0; i < fogCells.length; i++) {
+    px[i * 4] = 232; px[i * 4 + 1] = 238; px[i * 4 + 2] = 240;
+    px[i * 4 + 3] = Math.min(255, fogCells[i] * 215);
+  }
+  sctx.putImageData(fogImg, 0, 0);
+  fctx.clearRect(0, 0, w, h);
+  fctx.imageSmoothingEnabled = true;
+  fctx.imageSmoothingQuality = "high";
+  fctx.drawImage(fogSmall, 0, 0, w, h);
+  for (const d of fogDrops) {
+    const x = d.x * w, y = d.y * h, r = d.r * dpr;
+    const g = fctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+    g.addColorStop(0, "rgba(255,255,255,.9)");
+    g.addColorStop(0.35, "rgba(220,235,245,.25)");
+    g.addColorStop(1, "rgba(110,140,160,.5)");
+    fctx.fillStyle = g;
+    fctx.beginPath();
+    fctx.ellipse(x, y, r * 0.9, r, 0, 0, Math.PI * 2);
+    fctx.fill();
+  }
+}
+function wipeFog(x0, y0, x1, y1) {
+  const r = fogCanvas.getBoundingClientRect();
+  if (!r.width) return;
+  const R = 26; // 문지르는 손가락 굵기(px)
+  const cw = r.width / FOG_W, ch = r.height / FOG_H;
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 6));
+  let wiped = 0;
+  for (let s = 0; s <= steps; s++) {
+    const px = x0 + (x1 - x0) * s / steps - r.left, py = y0 + (y1 - y0) * s / steps - r.top;
+    for (let cy = Math.max(0, Math.floor((py - R) / ch)); cy < Math.min(FOG_H, Math.ceil((py + R) / ch)); cy++) {
+      for (let cx = Math.max(0, Math.floor((px - R) / cw)); cx < Math.min(FOG_W, Math.ceil((px + R) / cw)); cx++) {
+        const d = Math.hypot((cx + 0.5) * cw - px, (cy + 0.5) * ch - py) / R;
+        if (d < 1) { const i = cy * FOG_W + cx, before = fogCells[i]; fogCells[i] *= d * d; wiped += before - fogCells[i]; }
+      }
+    }
+    fogDrops = fogDrops.filter((d) => Math.hypot(d.x * r.width - px, d.y * r.height - py) > R);
+  }
+  if (wiped > 0.05) {
+    wipedSum += wiped;
+    const now = Date.now();
+    if (now - lastSqueak > 140) { lastSqueak = now; sfx("squeak"); }
+    if (!wipeCheered && wipedSum > 60) { wipeCheered = true; say("뽀득뽀득! 유리가 깨끗해졌어요 ✨"); }
+  }
+  fogKick();
+}
+
+// 유리 위에서: 톡 누르면 두드리기, 문지르면 김 닦기
+const roomEl = $("room");
+let gesture = null;
+roomEl.addEventListener("pointerdown", (e) => {
+  if (e.target.closest("#pet, #dish, #lamp, .poop, .bug, #foodPicker, button")) return;
+  gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: Date.now(), moved: false };
+  if (roomEl.classList.contains("foggy")) { try { roomEl.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ } }
+});
+roomEl.addEventListener("pointermove", (e) => {
+  if (!gesture || e.pointerId !== gesture.id) return;
+  if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) > 8) gesture.moved = true;
+  if (gesture.moved) wipeFog(gesture.lx, gesture.ly, e.clientX, e.clientY);
+  gesture.lx = e.clientX;
+  gesture.ly = e.clientY;
+});
+roomEl.addEventListener("pointerup", (e) => {
+  if (!gesture || e.pointerId !== gesture.id) return;
+  const g = gesture;
+  gesture = null;
+  if (!g.moved && Date.now() - g.t < 450) glassKnock(e.clientX, e.clientY);
+});
+roomEl.addEventListener("pointercancel", () => { gesture = null; });
+
+// ---- 탈피: 벽에 몸을 비벼 허물을 벗고, 벗은 허물을 먹는다 ----
+const SKIN_SVG = `<svg viewBox="0 0 80 30" aria-hidden="true">
+  <path d="M3 22c6-9 15-12 25-9 7 2 12-4 20-5 9-1 17 3 24 9-6 5-14 5-21 3-8-2-12 4-21 5C20 26 10 27 3 22z" fill="#f3efe2" fill-opacity=".85" stroke="#cfc6ae"/>
+  <path d="M14 20c5-3 10-3 14-1M36 15c4-2 9-2 13 0M55 13c3 1 6 3 8 5" stroke="#d8cfb8" fill="none"/></svg>`;
+
+function maybeShed() {
+  if (state.shedPhase === "ready" && !busy && !action && !petting && !state.sleeping && !document.hidden
+    && stage().key !== "egg") playShed();
+}
+function playShed() {
+  busy = true;
+  render();
+  $("bubble").textContent = "허물 벗을 시간! 벽에 몸을 비벼요";
+  const sec = walkTo(PET_MIN_X, 8);
+  setTimeout(() => {
+    $("pet").classList.add("rubbing");
+    sfx("rustle");
+    let n = 0;
+    const flakes = setInterval(() => {
+      const [x, y] = imgToRoom(25 + Math.random() * 55, 45 + Math.random() * 22);
+      const f = spawn("flake", "", x, y);
+      f.style.setProperty("--dx", (Math.random() * 30 - 15).toFixed(0) + "px");
+      setTimeout(() => f.remove(), 1600);
+      n++;
+      if (n === 4) { state.shedPhase = "done"; save(); render(); } // 하얀 허물이 벗겨지며 원래 색으로
+      if (n % 4 === 0) sfx("rustle");
+    }, 220);
+    setTimeout(() => {
+      clearInterval(flakes);
+      $("pet").classList.remove("rubbing");
+      // 벗은 허물은 꼬리 쪽에 남는다 → 뒤돌아서 먹는다
+      const [sx, sy] = imgToRoom(10, 86);
+      const skin = spawn("skin", "", sx, sy);
+      skin.innerHTML = SKIN_SVG;
+      setTimeout(() => {
+        facing = -facing;
+        $("pet").style.setProperty("--face", facing);
+        $("bubble").textContent = "벗은 허물을 냠냠! 🦎";
+        setTimeout(() => {
+          setAction("eat", 1800);
+          sfx("eat");
+          skin.classList.add("eaten");
+          setTimeout(() => {
+            skin.remove();
+            state.happy = clamp(state.happy + 10);
+            busy = false;
+            sfx("grow");
+            const [hx, hy] = imgToRoom(50, 55);
+            sparkle(8, hx, hy, 30);
+            say("반짝반짝 새 피부! ✨");
+            setTimeout(() => { if (!busy) say("게코는 벗은 허물을 먹어서 영양을 챙겨요"); }, 2300);
+            wander();
+          }, 1800);
+        }, 500);
+      }, 600);
+    }, 2600);
+  }, sec * 1000 + 200);
+}
+
+if (TEST) {
+  $("testShed").addEventListener("click", () => {
+    state.shedPhase = "pre"; state.shedFor = nextGoal().key; state.shedWet = 0;
+    save(); render();
+  });
+  $("testShedNow").addEventListener("click", () => { state.shedPhase = "ready"; maybeShed(); });
 }
 
 if (TEST) {

@@ -60,17 +60,38 @@ h1 { margin: 8px 0 12px; font-size: 1.6rem; color: var(--accent);
 #pet { position: absolute; left: 22.5%; bottom: 5%; width: 55%; height: 62%; transform: scaleX(var(--face, 1)); }
 /* 발밑 그림자: 몸이 뜨면 작고 옅어진다 (transform 때문에 #pet 안에서만 뒤로 깔림) */
 #pet::after { content: ""; position: absolute; left: 18%; right: 18%; bottom: -4%; height: 12%; z-index: -1; pointer-events: none;
-  background: radial-gradient(closest-side, #0007, #0003 60%, transparent); animation: shadow-bob 2s ease-in-out infinite; }
-@keyframes shadow-bob { 50% { transform: scale(.88); opacity: .75; } }
+  background: radial-gradient(closest-side, #0007, #0003 60%, transparent); animation: shadow-bob 3.2s ease-in-out infinite; }
+@keyframes shadow-bob { 50% { transform: scale(.97); opacity: .9; } }
 #room.night #pet::after { animation: none; }
 #room[data-action="play"] #pet::after { animation: shadow-hop .5s ease-in-out infinite; }
 @keyframes shadow-hop { 50% { transform: scale(.65); opacity: .45; } }
+/* #petBody: 그림 + 겹치는 혀·눈꺼풀을 같이 움직이는 틀 (걷기·먹기·뛰기 애니메이션은 여기에) */
+#petBody { position: absolute; inset: 0; transform-origin: 35% 90%; transition: transform .4s ease; }
 #lizard, #petImg { filter: drop-shadow(0 3px 2px #0004); }
-#lizard, #petImg { display: block; width: 100%; height: 100%; animation: bob 2s ease-in-out infinite; }
-#petImg { object-fit: contain; object-position: center bottom; }
-#lizard.sleeping, #petImg.sleeping { animation: none; }
-@keyframes bob { 50% { transform: translateY(-6px); } }
-#pet.walking #lizard, #pet.walking #petImg { animation: waddle .45s ease-in-out infinite alternate; }
+/* 숨쉬기: 배 쪽이 살짝 볼록해졌다 돌아온다. 잘 때는 더 느리게 */
+#lizard, #petImg { display: block; position: absolute; inset: 0; width: 100%; height: 100%;
+  transform-origin: 50% 72%; animation: breathe 3.2s ease-in-out infinite; }
+#petImg { object-fit: contain; object-position: center bottom; pointer-events: none; -webkit-user-drag: none; -webkit-touch-callout: none;
+  transition: filter 2.5s ease; }
+#lizard.sleeping, #petImg.sleeping { animation-duration: 5s; }
+@keyframes breathe { 50% { transform: scale(1.012, 1.03); } }
+#petFx { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#tongue { stroke-dasharray: 0 999; }
+#lids { opacity: 0; transition: opacity .35s; }
+.lid-line { fill: none; stroke: #4a3218; stroke-width: .8; stroke-linecap: round; }
+#pet { -webkit-touch-callout: none; user-select: none; }
+/* 길게 쓰다듬기: 눈을 지그시 감고 턱을 바닥에 댄다 */
+#pet.petting #petBody { transform: rotate(4deg) translateY(2%); transition: transform .6s ease; }
+#pet.petting #lids { opacity: 1; }
+#pet.petting #petImg { animation-duration: 4.6s; }
+/* 유리를 두드리면 고개를 들고 쳐다본다 */
+#pet.look #petBody { transform: rotate(-3deg); transition: transform .25s ease-out; }
+/* 탈피 직전: 몸이 뿌옇고 하얗게 변한다 */
+#pet.pale #petImg { filter: saturate(.25) brightness(1.2) contrast(.8) drop-shadow(0 3px 2px #0004); }
+/* 탈피 중: 벽에 몸을 비빈다 */
+#pet.rubbing #petBody { animation: rub .16s ease-in-out infinite alternate; }
+@keyframes rub { from { transform: translateX(-3px) rotate(-1.5deg); } to { transform: translateX(3px) rotate(1.5deg); } }
+#pet.walking #petBody { animation: waddle .45s ease-in-out infinite alternate; }
 @keyframes waddle { from { transform: rotate(-2deg) translateY(0); } to { transform: rotate(2deg) translateY(-3px); } }
 #bubble { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: linear-gradient(#fff, #f2f2f2); border-radius: 14px; padding: 4px 12px; font-size: .95rem; z-index: 5; min-height: 1.6em; white-space: nowrap;
   box-shadow: inset 0 -2px 0 #0001, 0 3px 0 #0002, 0 6px 12px #0004; }
@@ -91,8 +112,44 @@ h1 { margin: 8px 0 12px; font-size: 1.6rem; color: var(--accent);
 @keyframes wiggle { from { transform: translate(-50%, -50%) rotate(-12deg); } to { transform: translate(-50%, -50%) rotate(12deg); } }
 .rise-fx { animation: rise 1.8s ease-out forwards; }
 @keyframes rise { to { transform: translate(-50%, -150px) scale(1.4); opacity: 0; } }
-#room[data-action="eat"] #petImg, #room[data-action="eat"] #lizard { animation: chomp .25s ease-in-out infinite alternate; }
-#room[data-action="play"] #petImg, #room[data-action="play"] #lizard { animation: hop .5s ease-in-out infinite; }
+#room[data-action="eat"] #petBody { animation: chomp .25s ease-in-out infinite alternate; }
+#room[data-action="play"] #petBody { animation: hop .5s ease-in-out infinite; }
+/* 탈피 효과: 떨어지는 허물 조각, 바닥에 남은 허물 */
+.flake { width: 7px; height: 5px; border-radius: 40%; background: #f6f3eaee; box-shadow: 0 0 2px #fff; font-size: 0;
+  animation: flake-fall 1.5s ease-in forwards; }
+@keyframes flake-fall { to { transform: translate(calc(-50% + var(--dx, 0px)), 46px) rotate(220deg); opacity: 0; } }
+.skin { width: 22%; z-index: 2; filter: drop-shadow(0 2px 2px #0003); }
+.skin svg { display: block; width: 100%; }
+.skin.eaten { transition: transform 1.6s ease-in, opacity 1.6s ease-in; transform: translate(-50%, -50%) scale(.15); opacity: 0; }
+/* 유리 두드림: 동그랗게 퍼지는 파문 */
+.knock-fx { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #ffffffd0; box-shadow: 0 0 6px #fff8; z-index: 5;
+  animation: ripple .55s ease-out forwards; }
+@keyframes ripple { to { width: 80px; height: 80px; opacity: 0; border-width: 1px; } }
+.spray-fx { animation: spray .9s ease-out forwards; font-size: 1.6rem; }
+@keyframes spray { from { opacity: .9; } to { transform: translate(calc(-50% + var(--dx, 0px)), 70px) scale(.6); opacity: 0; } }
+
+/* ---- 결로: 습도가 높으면 유리 가장자리부터 뿌옇게 김이 서리고 물방울이 맺힌다 ---- */
+#fog { position: absolute; left: 0; top: 12px; width: 100%; height: calc(100% - 12px); z-index: 4; pointer-events: none; }
+#room.foggy { touch-action: none; }
+
+/* ---- 실제 시간에 따른 조명 ---- */
+#ambient { position: absolute; inset: 0; z-index: 2; pointer-events: none; transition: opacity 3s; }
+body[data-tod="day"] #ambient { mix-blend-mode: screen;
+  background: linear-gradient(118deg, #fff6c855 0 12%, transparent 30%, #fff6c82e 42%, transparent 55%),
+              radial-gradient(ellipse at 10% -10%, #fff3c070, transparent 60%); }
+body[data-tod="dawn"] #ambient { mix-blend-mode: soft-light; background: linear-gradient(160deg, #ffb38a88, #ffd9a044 50%, transparent); }
+body[data-tod="dusk"] #ambient { mix-blend-mode: soft-light; background: linear-gradient(200deg, #ff8a3daa, #ffb06044 55%, #6a4aa044); }
+/* 밤: 나이트 글로 램프(붉은빛) + 푸른 달빛 */
+body[data-tod="night"] #ambient { mix-blend-mode: multiply; background: linear-gradient(#5a5fb0aa, #4a3f8a99); }
+body[data-tod="night"] #glow { background: radial-gradient(ellipse at top, #ff4a3a77, #a03cff22 55%, transparent 72%); }
+body[data-tod="night"] #room.lamp-off #ambient { background: linear-gradient(#3a3f80cc, #2a2560bb); }
+/* 화면 전체 색감도 은은하게 */
+body::after { content: ""; position: fixed; inset: 0; z-index: 40; pointer-events: none; transition: background 3s; }
+body[data-tod="dawn"]::after { background: #ffb38a10; }
+body[data-tod="dusk"]::after { background: #ff8a3d14; }
+body[data-tod="night"]::after { background: #2b246622; }
+body[data-tod="night"] { background: radial-gradient(ellipse at 50% 0, #ece9ff, #cfcdea 45%, #aeaad8); background-attachment: fixed; }
+body[data-tod="dusk"] { background: radial-gradient(ellipse at 50% 0, #fff6ea, #f3e3cf 45%, #dcc6a4); background-attachment: fixed; }
 @keyframes chomp { to { transform: translateX(8px) scale(1.04); } }
 @keyframes hop { 50% { transform: translateY(-18px); } }
 #foodPicker { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; gap: 8px; align-items: center; background: linear-gradient(#fff, #f4f4f4); border-radius: 16px; padding: 8px; box-shadow: inset 0 -2px 0 #0001, 0 4px 0 #0002, 0 8px 16px #0005; white-space: nowrap; }
@@ -120,6 +177,7 @@ progress::-moz-progress-bar { border-radius: 999px;
 #s-energy { --c1: #ffe36b; --c2: #f2b600; }
 #s-clean  { --c1: #a5d3ff; --c2: #4a90e2; }
 #s-water  { --c1: #8fe3f5; --c2: #1aa6c9; }
+#s-humid  { --c1: #c9b8ff; --c2: #7e57c2; }
 #s-grow   { --c1: #ffd54f; --c2: #f9a825; }
 #actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 /* 행동 버튼: 젤리처럼 볼록한 윗면 + 두꺼운 아랫면, 누르면 쑥 들어간다 */
@@ -130,7 +188,8 @@ progress::-moz-progress-bar { border-radius: 999px;
   transition: transform .08s, box-shadow .08s; }
 #actions button:active { transform: translateY(5px);
   box-shadow: inset 0 2px 0 #ffffff40, inset 0 -1px 0 #0000001f, 0 1px 0 var(--edge), 0 3px 6px #1b3a1c40; }
-#actions #lampBtn { --top: #ffa940; --bot: #f57c00; --edge: #b54a00; }
+#actions #lampBtn { --top: #ffa940; --bot: #f57c00; --edge: #b54a00; grid-column: 1 / -1; }
+#actions #mistBtn { --top: #8fb6ff; --bot: #4a7fe0; --edge: #2f58a8; }
 #actions #mathBtn { grid-column: 1 / -1; --top: #a084f0; --bot: #7c4dff; --edge: #5531c9; }
 #mathLeft { display: block; font-size: .8rem; opacity: .9; }
 
