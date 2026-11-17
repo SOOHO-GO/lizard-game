@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=0.6.1">
 </head>
 <body>
 <main id="app">
@@ -160,9 +160,9 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.6.0</small></footer>
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.6.1</small></footer>
 </main>
-<script src="game.js"></script>
+<script src="game.js?v=0.6.1"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
