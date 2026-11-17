@@ -348,7 +348,8 @@ function render() {
   $("petImg").classList.toggle("sleeping", state.sleeping);
   $("room").classList.toggle("night", state.sleeping);
   renderTemp();
-  if (!busy) $("bubble").textContent = st.key === "egg" ? "곧 태어날 거예요..." : m.text;
+  // 방금 한 말(say)은 2초 동안 그대로 둔다 (5초마다 하는 화면 갱신이 덮어쓰지 않게)
+  if (!busy && Date.now() >= sayUntil) $("bubble").textContent = st.key === "egg" ? "곧 태어날 거예요..." : m.text;
   $("dark").hidden = !state.sleeping;
   renderBars();
   $("sleepBtn").textContent = state.sleeping ? "☀️ 깨우기" : "🌙 재우기";
@@ -774,7 +775,12 @@ const ACTIONS = {
   play() {
     if (state.sleeping) return nope("쿨쿨 자는 중이에요");
     if (state.energy < 15) return nope("너무 졸려서 못 놀아요");
-    startBugGame();
+    sfx("tap");
+    busy = true;
+    render();
+    $("bubble").textContent = "무엇을 하고 놀까요?";
+    $("playPicker").style.display = "";
+    stopWalk();
   },
   sleep() {
     state.sleeping = !state.sleeping;
@@ -801,10 +807,11 @@ const ACTIONS = {
   },
 };
 
-let sayTimer;
+let sayTimer, sayUntil = 0;
 function say(text) {
   $("bubble").textContent = text;
   clearTimeout(sayTimer);
+  sayUntil = Date.now() + 2000;
   sayTimer = setTimeout(render, 2000);
   save();
   renderStatsOnly();
@@ -1674,7 +1681,8 @@ function wipeFog(x0, y0, x1, y1) {
 const roomEl = $("room");
 let gesture = null;
 roomEl.addEventListener("pointerdown", (e) => {
-  if (e.target.closest("#pet, #dish, #lamp, .poop, .bug, #foodPicker, button")) return;
+  if (hunt || hideGame) return; // 놀이 중에는 유리 두드리기·닦기를 하지 않는다
+  if (e.target.closest("#pet, #dish, #lamp, .poop, .bug, #foodPicker, #playPicker, button")) return;
   gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: Date.now(), moved: false };
   if (roomEl.classList.contains("foggy")) { try { roomEl.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ } }
 });
@@ -1692,6 +1700,282 @@ roomEl.addEventListener("pointerup", (e) => {
   if (!g.moved && Date.now() - g.t < 450) glassKnock(e.clientX, e.clientY);
 });
 roomEl.addEventListener("pointercancel", () => { gesture = null; });
+
+// ================= 놀아주기 =================
+function choosePlay(kind) {
+  $("playPicker").style.display = "none";
+  if (!kind) { busy = false; render(); return; }
+  sfx("tap");
+  if (kind === "bugs") startBugGame();
+  else if (kind === "hunt") startHunt();
+  else if (kind === "hide") startHide();
+}
+document.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => choosePlay(b.dataset.play)));
+
+// 게코 입 위치 (방 기준 %)
+function mouthRoom() {
+  if (head) return imgToRoom(head.mouth[0], head.mouth[1]);
+  return [petX + 27.5 + facing * 22, 75];
+}
+
+// ---- 사냥 놀이: 집게로 밀웜을 천천히 움직이면 게코가 살금살금 다가가 꼬리를 떨다가 덥석! ----
+// 실제 레오파드 게코는 먹이를 발견하면 몸을 낮추고 꼬리 끝을 부르르 떨다가 덮친다.
+const HUNT_MS = 25000, HUNT_GOAL = 3;
+const HUNT_FAST = 70;   // 밀웜이 이보다 빠르면(방 너비 %/초) 깜짝 놀라 멈춘다
+const HUNT_FLOOR = 55;  // 이보다 아래(방 높이 %)로 내려와야 닿는다
+const HUNT_REACH = 8;   // 입과 밀웜 사이가 이 안이면 덮칠 수 있다
+let hunt = null;
+
+function startHunt() {
+  if (state.hunger > 92) { busy = false; render(); return nope("배가 불러서 사냥할 기분이 아니에요"); }
+  busy = true;
+  stopWalk();
+  const lure = spawn("lure", "", 50, 30);
+  // 먹이 집게(핀셋): 위에서 내려온 금속 집게 끝에 밀웜이 물려 있다
+  lure.innerHTML = `<svg class="lure-tongs" viewBox="0 0 40 200" aria-hidden="true">
+      <path d="M10 0L18 196M30 0L22 196" stroke="#8d969e" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <path d="M11 0L18.5 190M29 0L21.5 190" stroke="#e3e8ec" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    </svg><span class="worm">🐛</span>`;
+  const t = performance.now();
+  hunt = { lure, x: 50, y: 30, lastX: 50, lastY: 30, v: 0, dragging: false, caught: 0, stalk: 0, cool: 0,
+    striking: false, end: t + HUNT_MS, last: t, frozen: 0, mode: "" };
+  $("room").classList.add("hunting");
+  $("bubble").textContent = "밀웜을 바닥 가까이, 천천히 움직여 봐요!";
+  sfx("start");
+  requestAnimationFrame(huntFrame);
+}
+
+function moveLure(e, jump) {
+  const r = $("room").getBoundingClientRect();
+  hunt.x = Math.max(4, Math.min(96, (e.clientX - r.left) / r.width * 100));
+  hunt.y = Math.max(14, Math.min(92, (e.clientY - r.top) / r.height * 100));
+  if (jump) { hunt.lastX = hunt.x; hunt.lastY = hunt.y; } // 처음 짚은 곳으로 순간이동한 건 속도로 치지 않는다
+}
+roomEl.addEventListener("pointerdown", (e) => {
+  if (!hunt) return;
+  hunt.dragging = true;
+  moveLure(e, true);
+  try { roomEl.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+});
+roomEl.addEventListener("pointermove", (e) => { if (hunt && (hunt.dragging || e.pointerType === "mouse")) moveLure(e, false); });
+roomEl.addEventListener("pointerup", () => { if (hunt) hunt.dragging = false; });
+
+function huntFrame(now) {
+  const h = hunt;
+  if (!h) return;
+  const dt = Math.min(0.1, Math.max(0.001, (now - h.last) / 1000));
+  h.last = now;
+  const sp = Math.hypot(h.x - h.lastX, h.y - h.lastY) / dt;
+  h.v = h.v * 0.8 + sp * 0.2;
+  h.lastX = h.x;
+  h.lastY = h.y;
+  h.lure.style.left = h.x + "%";
+  h.lure.style.top = h.y + "%";
+  if (h.cool > 0) h.cool -= dt;
+  const pet = $("pet");
+  // 상황이 바뀔 때만 말풍선을 바꾼다
+  const mode = (m, text) => { if (h.mode !== m) { h.mode = m; $("bubble").textContent = text; } };
+  if (h.v > HUNT_FAST) h.frozen = now + 1200; // 휙휙 움직이면 깜짝 놀라 잠깐 얼어붙는다
+  if (!h.striking && h.cool <= 0 && !h.lure.classList.contains("empty")) {
+    // 방향은 몸 가운데 기준으로 정한다 (입 기준이면 돌아설 때마다 좌우가 바뀌어 덜덜 떤다)
+    const dir = h.x > petX + 27.5 ? 1 : -1;
+    if (dir !== facing && now >= h.frozen) { facing = dir; pet.style.setProperty("--face", facing); }
+    const dx = h.x - mouthRoom()[0];
+    if (now < h.frozen) {
+      h.stalk = 0;
+      pet.classList.remove("crouch", "walking");
+      mode("fast", "깜짝! 너무 빨라요. 천천히~");
+    } else if (Math.abs(dx) > HUNT_REACH - 1) {
+      h.stalk = 0;
+      pet.classList.remove("crouch", "look");
+      mode("near", "살금살금 다가가는 중...");
+      const before = petX;
+      petX = Math.max(PET_MIN_X, Math.min(PET_MAX_X, petX + Math.sign(dx) * Math.min(Math.abs(dx), 9 * dt))); // 살금살금
+      pet.style.transition = "none";
+      pet.style.left = petX + "%";
+      pet.classList.toggle("walking", petX !== before);
+    } else if (h.y < HUNT_FLOOR) {
+      h.stalk = 0;
+      pet.classList.remove("crouch", "walking");
+      pet.classList.add("look"); // 고개를 들고 올려다본다
+      mode("high", "너무 높아요! 바닥 가까이 내려 주세요");
+    } else {
+      pet.classList.remove("walking", "look");
+      h.stalk += dt;
+      if (h.stalk > 0.3) { pet.classList.add("crouch"); mode("stalk", "몸을 낮추고 꼬리를 부르르… 쉿!"); }
+      if (h.stalk > 1.5) huntStrike();
+    }
+  } else if (!h.striking) {
+    pet.classList.remove("crouch", "walking");
+  }
+  if ((now > h.end || h.caught >= HUNT_GOAL) && !h.striking) return endHunt();
+  requestAnimationFrame(huntFrame);
+}
+
+function huntStrike() {
+  const h = hunt, pet = $("pet");
+  h.striking = true;
+  h.stalk = 0;
+  h.mode = ""; // 덮친 결과를 말한 뒤 다음 상황에서 다시 말풍선을 바꾼다
+  pet.classList.remove("crouch");
+  pet.classList.add("strike");
+  flickTongue();
+  setTimeout(() => {
+    if (hunt !== h) return;
+    const hit = Math.abs(h.x - mouthRoom()[0]) < HUNT_REACH + 1 && h.y >= HUNT_FLOOR && h.v < HUNT_FAST;
+    if (hit) {
+      h.caught++;
+      sfx("catch");
+      setTimeout(() => sfx("eat"), 150);
+      h.lure.classList.add("empty");
+      $("bubble").textContent = `덥석! ${h.caught}마리 냠냠`;
+      setTimeout(() => { if (hunt === h && h.caught < HUNT_GOAL) h.lure.classList.remove("empty"); }, 1300);
+      h.cool = 1.4;
+    } else {
+      sfx("nope");
+      $("bubble").textContent = "휙! 놓쳤어요. 가만히 기다려 줘요";
+      h.cool = 1;
+    }
+  }, 180);
+  setTimeout(() => { pet.classList.remove("strike"); if (hunt === h) h.striking = false; }, 350);
+}
+
+function endHunt() {
+  const h = hunt;
+  hunt = null;
+  h.lure.remove();
+  $("room").classList.remove("hunting");
+  $("pet").classList.remove("crouch", "strike", "walking", "look");
+  tick();
+  state.happy = clamp(state.happy + 8 + h.caught * 4);
+  state.hunger = clamp(state.hunger + h.caught * 6);
+  state.energy = clamp(state.energy - 8);
+  if (h.caught && state.digest.length < MAX_DIGEST) {
+    state.digest.push(state.ageMin + DIGEST_MIN + Math.random() * DIGEST_RAND);
+    state.digest.sort((a, b) => a - b);
+  }
+  busy = false;
+  sfx(h.caught ? "yay" : "tap");
+  say(h.caught >= HUNT_GOAL ? "사냥 대성공! 살금살금… 덥석!" : h.caught ? `${h.caught}마리 잡았어요! 신나요` : "다음엔 천천히 움직여 봐요");
+  wander();
+}
+
+// ---- 숨바꼭질: 게코가 돌·통나무·화분 중 하나에 숨고 자리가 섞인다. 맞히면 더 빨리 섞는다 ----
+const HIDE_SPOTS = ["🪨", "🪵", "🪴"], HIDE_XS = [20, 50, 80], HIDE_ROUNDS = 3;
+let hideGame = null;
+const spotX = (el) => parseFloat(el.style.left);
+const petXAt = (x) => Math.max(PET_MIN_X, Math.min(PET_MAX_X, x - 27.5)); // 그 자리 위에 게코 몸 가운데가 오게
+
+function startHide() {
+  busy = true;
+  stopWalk();
+  const spots = HIDE_SPOTS.map((icon, i) => {
+    const el = spawn("hide-spot", icon, HIDE_XS[i], 84);
+    el.addEventListener("pointerdown", (e) => { e.stopPropagation(); pickSpot(el); });
+    return el;
+  });
+  hideGame = { spots, round: 0, found: 0, gecko: null, ready: false, swaps: 3, speed: 600 };
+  $("room").classList.add("hiding");
+  sfx("start");
+  hideRound();
+}
+
+function hideRound() {
+  const g = hideGame;
+  g.ready = false;
+  g.spots.forEach((s) => { s.classList.remove("lift", "right", "wrong"); s.style.transition = ""; });
+  $("pet").classList.remove("gone");
+  g.gecko = g.spots[Math.floor(Math.random() * g.spots.length)];
+  $("bubble").textContent = `${g.round + 1}번째! 어디에 숨는지 잘 봐요 👀`;
+  const sec = walkTo(petXAt(spotX(g.gecko)), 18);
+  setTimeout(() => {
+    if (hideGame !== g) return;
+    g.gecko.classList.add("lift"); // 들추고
+    setTimeout(() => {
+      if (hideGame !== g) return;
+      $("pet").classList.add("gone"); // 쏙 들어간 뒤 덮는다
+      setTimeout(() => {
+        if (hideGame !== g) return;
+        g.gecko.classList.remove("lift");
+        setTimeout(() => shuffleSpots(g), 700);
+      }, 400);
+    }, 450);
+  }, sec * 1000 + 300);
+}
+
+function shuffleSpots(g) {
+  $("bubble").textContent = "섞는다~ 섞는다~";
+  let k = 0;
+  (function swapOnce() {
+    if (hideGame !== g) return;
+    if (k++ >= g.swaps) {
+      g.spots.forEach((s) => { s.style.transition = ""; });
+      g.ready = true;
+      $("bubble").textContent = "게코는 어디에 있을까요? 톡!";
+      return;
+    }
+    const a = Math.floor(Math.random() * 3);
+    let b = Math.floor(Math.random() * 2);
+    if (b >= a) b++;
+    const A = g.spots[a], B = g.spots[b], ax = A.style.left;
+    A.style.transition = B.style.transition = `left ${g.speed}ms ease-in-out`;
+    A.style.animationDuration = g.speed + "ms";
+    A.classList.add("over"); // 하나는 위로 넘어가며 자리를 바꾼다
+    A.style.left = B.style.left;
+    B.style.left = ax;
+    sfx("tap");
+    setTimeout(() => { A.classList.remove("over"); swapOnce(); }, g.speed + 60);
+  })();
+}
+
+function pickSpot(el) {
+  const g = hideGame;
+  if (!g || !g.ready) return;
+  g.ready = false;
+  el.classList.add("lift");
+  const ok = el === g.gecko;
+  const showGecko = () => {
+    g.gecko.classList.add("lift");
+    placeAt(petXAt(spotX(g.gecko)));
+    $("pet").classList.remove("gone");
+  };
+  if (ok) {
+    g.found++;
+    sfx("yay");
+    showGecko();
+    el.classList.add("right");
+    $("bubble").textContent = "찾았다! 🎉";
+    sparkle(6, spotX(el), 70, 20);
+    g.swaps += 2; // 맞히면 더 많이, 더 빨리 섞는다
+    g.speed = Math.max(260, g.speed - 120);
+  } else {
+    sfx("nope");
+    el.classList.add("wrong");
+    $("bubble").textContent = "여기는 없어요!";
+    setTimeout(() => { if (hideGame === g) { showGecko(); $("bubble").textContent = "여기 숨어 있었어요!"; } }, 700);
+  }
+  setTimeout(() => {
+    if (hideGame !== g) return;
+    g.round++;
+    if (g.round >= HIDE_ROUNDS) endHide();
+    else hideRound();
+  }, ok ? 1600 : 2300);
+}
+
+function endHide() {
+  const g = hideGame;
+  hideGame = null;
+  g.spots.forEach((s) => s.remove());
+  $("pet").classList.remove("gone");
+  $("room").classList.remove("hiding");
+  tick();
+  state.happy = clamp(state.happy + 8 + g.found * 5);
+  state.energy = clamp(state.energy - 6);
+  busy = false;
+  sfx(g.found ? "yay" : "tap");
+  say(g.found === HIDE_ROUNDS ? "3번 모두 찾았어요! 눈이 정말 좋아요 👀" : `${HIDE_ROUNDS}번 중 ${g.found}번 찾았어요!`);
+  wander();
+}
 
 // ---- 탈피: 벽에 몸을 비벼 허물을 벗고, 벗은 허물을 먹는다 ----
 const SKIN_SVG = `<svg viewBox="0 0 80 30" aria-hidden="true">

@@ -121,6 +121,33 @@ h1 { margin: 8px 0 12px; font-size: 1.6rem; color: var(--accent);
 .skin { width: 22%; z-index: 2; filter: drop-shadow(0 2px 2px #0003); }
 .skin svg { display: block; width: 100%; }
 .skin.eaten { transition: transform 1.6s ease-in, opacity 1.6s ease-in; transform: translate(-50%, -50%) scale(.15); opacity: 0; }
+/* ---- 사냥 놀이: 집게에 물린 밀웜 ---- */
+.lure { z-index: 5; font-size: 2.2rem; }
+.lure .lure-tongs { position: absolute; left: 50%; bottom: 62%; width: .5em; height: 2.6em; transform: translateX(-50%);
+  filter: drop-shadow(1px 2px 1px #0005); }
+#room.hiding #decor { opacity: .3; transition: opacity .4s; }
+.lure .worm { display: inline-block; animation: wiggle-worm .35s infinite alternate; transition: opacity .2s; }
+@keyframes wiggle-worm { from { transform: rotate(-15deg); } to { transform: rotate(15deg); } }
+.lure.empty .worm { opacity: 0; }
+#room.hunting { touch-action: none; cursor: grab; }
+/* 몸을 낮추고 꼬리를 부르르 떨다가 → 덥석! */
+#pet.crouch #petBody { animation: crouch .12s ease-in-out infinite alternate; }
+@keyframes crouch { from { transform: translateY(3%) scaleY(.95) rotate(1deg); } to { transform: translateY(3%) scaleY(.95) rotate(-.6deg) translateX(-1%); } }
+#pet.strike #petBody { animation: strike .3s ease-out; }
+@keyframes strike { 40% { transform: translateX(14%) translateY(-2%); } 100% { transform: none; } }
+
+/* ---- 숨바꼭질: 돌·통나무·화분 ---- */
+.hide-spot { pointer-events: auto; cursor: pointer; z-index: 4; font-size: 4.2rem; touch-action: manipulation; transition: transform .3s ease-out; }
+.hide-spot.lift { transform: translate(-50%, -95%) rotate(-8deg); }
+.hide-spot.over { animation-name: hop-over; animation-timing-function: ease-in-out; z-index: 5; }
+@keyframes hop-over { 50% { transform: translate(-50%, -100%) scale(1.08); } }
+.hide-spot.right { filter: drop-shadow(0 0 12px #ffeb3b) drop-shadow(0 4px 3px #0005); }
+.hide-spot.wrong { animation: shake .35s; }
+@keyframes shake { 25% { transform: translate(-60%, -95%); } 75% { transform: translate(-40%, -95%); } }
+#pet.gone #petBody { transform: scale(.25) translateY(25%); opacity: 0; transition: transform .4s ease-in, opacity .4s; }
+#pet.gone::after { opacity: 0; }
+#room.hiding #pet { pointer-events: none; }
+
 /* 유리 두드림: 동그랗게 퍼지는 파문 */
 .knock-fx { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #ffffffd0; box-shadow: 0 0 6px #fff8; z-index: 5;
   animation: ripple .55s ease-out forwards; }
@@ -152,7 +179,11 @@ body[data-tod="night"] { background: radial-gradient(ellipse at 50% 0, #ece9ff, 
 body[data-tod="dusk"] { background: radial-gradient(ellipse at 50% 0, #fff6ea, #f3e3cf 45%, #dcc6a4); background-attachment: fixed; }
 @keyframes chomp { to { transform: translateX(8px) scale(1.04); } }
 @keyframes hop { 50% { transform: translateY(-18px); } }
-#foodPicker { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; gap: 8px; align-items: center; background: linear-gradient(#fff, #f4f4f4); border-radius: 16px; padding: 8px; box-shadow: inset 0 -2px 0 #0001, 0 4px 0 #0002, 0 8px 16px #0005; white-space: nowrap; }
+#foodPicker, #playPicker { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; gap: 8px; align-items: center; background: linear-gradient(#fff, #f4f4f4); border-radius: 16px; padding: 8px; box-shadow: inset 0 -2px 0 #0001, 0 4px 0 #0002, 0 8px 16px #0005; white-space: nowrap; }
+#playPicker { flex-wrap: wrap; justify-content: center; white-space: normal; width: max-content; max-width: 94%; }
+#playPicker button[data-play]:not(.link) { font-size: 1.05rem; padding: 10px 12px; border: 0; border-radius: 12px; cursor: pointer;
+  background: linear-gradient(#f3fff2, #c8efc4); box-shadow: inset 0 1px 0 #fff, 0 3px 0 #6fbf6a, 0 5px 6px #0002; }
+#playPicker button[data-play]:not(.link):active { transform: translateY(2px); box-shadow: inset 0 1px 0 #fff, 0 1px 0 #6fbf6a; }
 #foodPicker button[data-food]:not(.link) { font-size: 1.05rem; padding: 10px 12px; border: 0; border-radius: 12px; cursor: pointer;
   background: linear-gradient(#fff8ee, #ffe0b2); box-shadow: inset 0 1px 0 #fff, 0 3px 0 #ffb74d, 0 5px 6px #0002; }
 #foodPicker button[data-food]:not(.link):active { transform: translateY(2px); box-shadow: inset 0 1px 0 #fff, 0 1px 0 #ffb74d; }
@@ -297,8 +328,10 @@ footer { margin-top: 16px; }
   .bug { font-size: 3.8rem; }
   .spray-fx { font-size: 2.4rem; }
   #poops .poop { font-size: 2.3rem; }
-  #foodPicker { bottom: 24px; padding: 10px; gap: 10px; }
-  #foodPicker button[data-food]:not(.link) { font-size: 1.35rem; padding: 14px 16px; }
+  #foodPicker, #playPicker { bottom: 24px; padding: 10px; gap: 10px; }
+  #foodPicker button[data-food]:not(.link), #playPicker button[data-play]:not(.link) { font-size: 1.35rem; padding: 14px 16px; }
+  .lure { font-size: 3.4rem; }
+  .hide-spot { font-size: 7rem; }
   .knock-fx { border-width: 3px; }
 
   /* 오른쪽: 게이지 3칸, 버튼 3칸으로 높이를 아낀다 */
