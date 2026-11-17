@@ -1,6 +1,6 @@
 // 네트워크 우선: 인터넷이 되면 항상 최신 버전, 안 되면 저장해둔 버전으로 실행
-const CACHE = 'lizard-v1';
-const ASSETS = ['./', './index.html', './style.css', './game.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const CACHE = 'lizard-v2';
+const ASSETS = ['./', './index.html', './help.html', './style.css', './game.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));

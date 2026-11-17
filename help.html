@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>게코 키우기 안내서</title>
+<style>
+  :root { --bg: #e8f5e9; --card: #fff; --ink: #2e4a2f; --accent: #43a047; --soft: #f1f8e9; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Malgun Gothic", system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 1.15rem; line-height: 1.7; word-break: keep-all; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+  a.back { display: inline-block; margin-bottom: 12px; padding: 10px 18px; border-radius: 14px; background: var(--accent); color: #fff; text-decoration: none; font-weight: bold; box-shadow: 0 4px 0 #2e7d32; }
+  .hero { text-align: center; background: var(--card); border-radius: 24px; padding: 20px 16px; }
+  .hero img { width: 200px; max-width: 70%; }
+  h1 { font-size: 1.8rem; margin: 6px 0; }
+  h2 { font-size: 1.4rem; margin: 0 0 10px; }
+  section { background: var(--card); border-radius: 24px; padding: 18px 16px; margin-top: 16px; }
+  .em { font-size: 1.6rem; }
+  /* 성장 단계 */
+  .grow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+  .grow div { background: var(--soft); border-radius: 16px; padding: 8px 4px; font-size: .95rem; line-height: 1.4; }
+  .grow img { width: 100%; height: 70px; object-fit: contain; }
+  .grow b { display: block; }
+  @media (max-width: 420px) { .grow { grid-template-columns: repeat(2, 1fr); } }
+  /* 할 일 목록 */
+  ul.todo { list-style: none; padding: 0; margin: 0; }
+  ul.todo li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 2px dashed #dcedc8; }
+  ul.todo li:last-child { border-bottom: 0; }
+  ul.todo .em { flex: 0 0 2.2rem; text-align: center; }
+  /* 버튼 설명 */
+  .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn { background: var(--accent); color: #fff; border-radius: 16px; padding: 12px; box-shadow: 0 4px 0 #2e7d32; font-size: 1rem; line-height: 1.5; }
+  .btn b { display: block; font-size: 1.15rem; }
+  .btn.lamp { background: #fb8c00; box-shadow: 0 4px 0 #e65100; }
+  .btn.math { background: #7c4dff; box-shadow: 0 4px 0 #5531c9; grid-column: 1 / -1; }
+  .mathbox { background: #f3efff; border-radius: 14px; padding: 10px 14px; margin-top: 8px; }
+  /* 온도 */
+  .temps { display: grid; gap: 8px; }
+  .temp { border-radius: 14px; padding: 10px 14px; }
+  .cold { background: #bbdefb; } .good { background: #c8e6c9; } .hot { background: #ffccbc; }
+  /* 기분 */
+  .moods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: center; }
+  .moods div { background: var(--soft); border-radius: 16px; padding: 8px; font-size: 1rem; line-height: 1.4; }
+  .moods img { width: 100%; height: 90px; object-fit: contain; }
+  /* 진짜 게코 이야기 */
+  .fact { background: #fffde7; border-radius: 14px; padding: 10px 14px; margin-top: 8px; }
+  .hug { text-align: center; background: #fce4ec; }
+  .end { text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="./">← 게코한테 돌아가기</a>
+
+  <div class="hero">
+    <img src="assets/lizard/adult_happy.png" alt="웃고 있는 어른 레오파드 게코">
+    <h1>안녕! 나는 레오파드 게코야 🦎</h1>
+    <p>나를 잘 돌봐주면 알에서 태어나서<br>멋진 어른 게코로 자랄 수 있어!<br>어떻게 돌봐주는지 같이 알아보자.</p>
+  </div>
+
+  <section>
+    <h2>🌱 이렇게 자라요</h2>
+    <div class="grow">
+      <div><img src="assets/lizard/egg.png" alt="알"><b>알</b>10분 기다리면<br>톡! 태어나요</div>
+      <div><img src="assets/lizard/hatchling_happy.png" alt="아기 게코"><b>아기 게코</b>줄무늬가<br>있어요</div>
+      <div><img src="assets/lizard/juvenile_happy.png" alt="어린 게코"><b>어린 게코</b>2일 동안<br>잘 돌봐주면</div>
+      <div><img src="assets/lizard/adult_happy.png" alt="어른 게코"><b>어른 게코</b>7일 동안<br>잘 돌봐주면</div>
+    </div>
+    <p>화면의 <b>🌱 노란 막대</b>가 꽉 차면 다음 단계로 자라요.<br>
+    배고프거나, 목마르거나, 너무 춥거나 더우면 <b>막대가 멈춰요.</b><br>
+    그러니까 매일 잘 돌봐줘야 해요!</p>
+    <p>🥚 어른 게코를 <b>3일 더</b> 잘 돌봐주면 <b>알을 낳아요.</b><br>
+    다 키운 게코는 <b>📸 가족 앨범</b>에 이름과 사진으로 남고, 새 아기가 알에서 다시 태어나요.</p>
+  </section>
+
+  <section>
+    <h2>✅ 매일 해줄 일</h2>
+    <ul class="todo">
+      <li><span class="em">🍎</span><span><b>밥 주기</b><br>귀뚜라미나 밀웜을 줘요. 밀웜은 맛있는 간식이에요.</span></li>
+      <li><span class="em">💧</span><span><b>물 갈아주기</b><br>하루에 한 번! 물그릇 물이 탁해지면 새 물로 바꿔줘요.</span></li>
+      <li><span class="em">💩</span><span><b>응가 치우기</b><br>밥을 먹고 조금 지나면 응가를 해요. 응가를 톡 누르면 집게로 치울 수 있어요.</span></li>
+      <li><span class="em">⚽</span><span><b>같이 놀기</b><br>귀뚜라미 잡기 놀이를 하면 엄청 좋아해요.</span></li>
+      <li><span class="em">🌙</span><span><b>밤에 재우기</b><br>잘 때는 히팅램프를 꺼 주세요. 그래야 시원하게 푹 자요.</span></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>🔘 버튼 알아보기</h2>
+    <div class="buttons">
+      <div class="btn"><b>🍎 밥주기</b>먹이를 골라서 줘요</div>
+      <div class="btn"><b>⚽ 놀아주기</b>뛰어다니는 귀뚜라미를 톡톡 잡아요</div>
+      <div class="btn"><b>🌙 재우기</b>쿨쿨 재워요. 한 번 더 누르면 깨워요</div>
+      <div class="btn"><b>🧹 청소하기</b>반짝이는 응가를 눌러서 치워요</div>
+      <div class="btn"><b>💧 물 갈기</b>물그릇에 새 물을 줘요</div>
+      <div class="btn lamp"><b>🔥 히팅램프</b>사육장을 따뜻하게 해요</div>
+      <div class="btn math"><b>✏️ 수학 미션</b>문제를 풀면 칼슘 영양제를 받아요</div>
+    </div>
+    <p>💡 <b>게코를 손가락으로 톡</b> 건드려 보세요. "끽끽!" 하고 대답해요.<br>
+    💡 <b>물그릇</b>이나 <b>램프</b>를 직접 눌러도 돼요.<br>
+    💡 화면 위의 <b>🔊</b> 버튼으로 소리를 끄고 켤 수 있어요.</p>
+  </section>
+
+  <section>
+    <h2>✏️ 수학 미션</h2>
+    <p>학년을 고르고 문제 <b>5개</b>를 풀어요. <b>4개 이상</b> 맞히면<br>
+    🦴 <b>칼슘 영양제</b>를 받아서 게코가 <b>1시간 더 빨리</b> 자라고 기분도 좋아져요!</p>
+    <div class="mathbox">2학년: 두 자리 덧셈·뺄셈, 곱셈구구 ✖️</div>
+    <div class="mathbox">3학년: 세 자리 덧셈·뺄셈, 곱셈, 나눗셈 ➗</div>
+    <p>🦴 영양제는 <b>하루에 3번</b>까지 받을 수 있어요. 그 뒤에도 연습은 계속할 수 있어요.<br>
+    🔍 진짜 레오파드 게코도 먹이에 <b>칼슘 가루</b>를 묻혀 줘야 뼈가 튼튼하게 자라요.</p>
+  </section>
+
+  <section>
+    <h2>🌡️ 온도계 보는 법</h2>
+    <p>게코는 몸이 차가운 동물이라서 <b>따뜻한 곳</b>이 필요해요.<br>사육장 왼쪽 위 온도계 색깔을 봐요.</p>
+    <div class="temps">
+      <div class="temp cold">🥶 <b>파란색 = 추워요</b><br>→ 🔥 램프를 켜 주세요. 추우면 밥도 못 먹어요.</div>
+      <div class="temp good">😊 <b>초록색 = 딱 좋아요</b><br>→ 지금처럼만 해 주세요!</div>
+      <div class="temp hot">🥵 <b>주황색 = 더워요</b><br>→ 램프를 꺼 주세요. 더우면 동굴에 숨어요.</div>
+    </div>
+    <p>램프를 켜면 온도가 <b>천천히</b> 올라가고, 끄면 <b>천천히</b> 내려가요.<br>
+    계속 켜 두면 너무 뜨거워지니까 가끔 온도계를 확인해요.</p>
+  </section>
+
+  <section>
+    <h2>💭 게코 기분 알아보기</h2>
+    <div class="moods">
+      <div><img src="assets/lizard/juvenile_happy.png" alt="행복한 게코"><b>😄 신나요</b><br>잘 돌봐주고 있어요!</div>
+      <div><img src="assets/lizard/juvenile_ok.png" alt="보통 기분 게코"><b>🙂 괜찮아요</b><br>조금만 더 신경 써줘요</div>
+      <div><img src="assets/lizard/juvenile_sad.png" alt="슬픈 게코"><b>😢 슬퍼요</b><br>말풍선을 읽어 봐요. 뭐가 필요한지 알려줘요</div>
+      <div><img src="assets/lizard/juvenile_sleep.png" alt="자는 게코"><b>😴 자요</b><br>쉿! 푹 자게 해 줘요</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>🔍 진짜 레오파드 게코 이야기</h2>
+    <div class="fact">🌙 진짜 게코는 <b>밤이나 저녁</b>에 더 활발하게 움직여요.</div>
+    <div class="fact">🍗 통통한 꼬리에 <b>영양분을 저장</b>해요. 꼬리가 통통하면 건강하다는 뜻이에요.</div>
+    <div class="fact">👁️ 다른 게코들과 달리 <b>눈꺼풀이 있어서</b> 눈을 깜빡일 수 있어요.</div>
+    <div class="fact">🧗 발바닥이 끈적하지 않아서 <b>유리벽을 못 올라가요.</b></div>
+    <div class="fact">🐍 자라면서 <b>허물을 벗어요.</b> 벗은 허물은 스스로 먹기도 해요!</div>
+    <div class="fact">🚽 응가는 늘 <b>한쪽 구석</b>에만 해요. 깔끔하죠?</div>
+    <div class="fact">🎂 잘 키우면 <b>15년 넘게</b> 살 수 있어요.</div>
+  </section>
+
+  <section class="hug">
+    <h2>💚 걱정하지 마요</h2>
+    <p>며칠 못 들어와도 게코는 <b>아프거나 떠나지 않아요.</b><br>
+    조금 배고프고 심심해할 뿐이에요.<br>
+    다시 와서 밥 주고 놀아주면 금방 기분이 좋아져요!</p>
+  </section>
+
+  <div class="end"><a class="back" href="./">← 게코한테 돌아가기</a></div>
+</main>
+<script>
+  // 게임 주소의 ?p=이름, ?test 를 그대로 유지해서 내 게코로 돌아가게 한다
+  document.querySelectorAll("a.back").forEach((a) => { a.href = "./" + location.search; });
+  // 그림이 아직 없으면 자리만 숨긴다
+  document.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => { img.style.visibility = "hidden"; }));
+</script>
+</body>
+</html>

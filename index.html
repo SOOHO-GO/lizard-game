@@ -1,63 +1,142 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#2f6b4f">
-  <title>도마뱀 키우기</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Critter-Craft 도마뱀 다마고치</title>
+<meta name="theme-color" content="#3d9a41">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header class="top">
-      <div>
-        <h1 id="name">도마뱀 키우기</h1>
-        <div id="sub" class="sub"></div>
-      </div>
-      <div id="clock" class="clock"></div>
-    </header>
+<main id="app">
+  <h1>🦎 Critter-Craft</h1>
+  <nav id="topLinks">
+    <a id="helpLink" href="help.html">📖 게코 키우기 안내서</a>
+    <button id="albumBtn">📸 가족 앨범</button>
+  </nav>
 
-    <div class="tank-wrap">
-      <canvas id="tank"></canvas>
-      <div id="status" class="status"></div>
+  <section id="nameRow">
+    <input id="nameInput" maxlength="10" aria-label="이름">
+    <span id="stageLabel"></span>
+    <button id="muteBtn">🔊</button>
+  </section>
+
+  <section id="room">
+    <div id="lid"></div>
+    <div id="lamp"><div id="glow"></div></div>
+    <div id="thermo">🌡️ <span id="temp">31°C</span></div>
+    <div id="decor">
+      <svg class="d-plant" viewBox="0 0 60 100" aria-hidden="true">
+        <path d="M30 100C28 70 10 60 4 40c14 6 22 22 26 40C30 50 22 25 30 0c8 25 0 50 0 80 4-18 12-34 26-40-6 20-24 30-26 60z" fill="#5f9e4f"/>
+        <path d="M30 100C29 75 30 40 30 10" stroke="#3f6f35" stroke-width="2" fill="none"/>
+      </svg>
+      <svg class="d-hide" viewBox="0 0 120 70" aria-hidden="true">
+        <path d="M2 70Q6 12 58 6q54 4 60 64z" fill="#8a7763" stroke="#5e5040" stroke-width="2"/>
+        <path d="M20 40q20-24 46-26" stroke="#a8957f" stroke-width="5" fill="none" stroke-linecap="round"/>
+        <path d="M36 70q2-32 24-34 22 2 24 34z" fill="#2a2119"/>
+      </svg>
+      <svg class="d-dish" id="dish" viewBox="0 0 90 30" aria-label="물그릇">
+        <ellipse cx="45" cy="18" rx="44" ry="11" fill="#9e9e9e"/>
+        <ellipse id="waterFill" cx="45" cy="15" rx="37" ry="8" fill="#6ec6ff"/>
+        <ellipse cx="34" cy="13" rx="10" ry="2" fill="#fff9"/>
+      </svg>
     </div>
+    <div id="bubble"></div>
+    <div id="pet">
+      <svg id="lizard" viewBox="0 0 200 140" preserveAspectRatio="xMidYMax meet" role="img" aria-label="도마뱀"></svg>
+      <img id="petImg" alt="도마뱀" style="display:none">
+    </div>
+    <div id="poops"></div>
+    <div id="dark" hidden>💤</div>
+    <div id="foodPicker" style="display:none">
+      <button data-food="cricket">🦗 귀뚜라미</button>
+      <button data-food="worm">🐛 밀웜</button>
+      <button data-food="" class="link">그만두기</button>
+    </div>
+    <div id="glass"></div>
+  </section>
 
-    <section class="stats">
-      <div class="stat"><span>🍖 배부름</span><div class="bar"><i id="b-hunger"></i></div></div>
-      <div class="stat"><span>😊 기분</span><div class="bar"><i id="b-mood"></i></div></div>
-      <div class="stat"><span>🧽 청결</span><div class="bar"><i id="b-clean"></i></div></div>
-      <div class="stat"><span>❤️ 건강</span><div class="bar"><i id="b-health"></i></div></div>
-      <div class="env"><span id="temp">🌡️ --</span><span id="hum">💧 --</span></div>
-    </section>
+  <section id="stats">
+    <label>🍎 배고픔<progress id="s-hunger" max="100"></progress></label>
+    <label>😊 행복<progress id="s-happy" max="100"></progress></label>
+    <label>⚡ 에너지<progress id="s-energy" max="100"></progress></label>
+    <label>🧹 깨끗함<progress id="s-clean" max="100"></progress></label>
+    <label class="wide">💧 물<progress id="s-water" max="100"></progress></label>
+    <label class="wide">🌱 <span id="growLabel">성장</span> <small id="growLeft"></small><progress id="s-grow" max="100"></progress></label>
+  </section>
 
-    <section class="actions">
-      <button data-act="feed">🦗<b>먹이</b></button>
-      <button data-act="mist">💦<b>분무</b></button>
-      <button data-act="clean">🧹<b>청소</b></button>
-      <button data-act="heater" id="heater-btn">🔥<b id="heater-label">히터</b></button>
-      <button data-act="vet" id="vet-btn">💊<b>병원</b></button>
-    </section>
+  <section id="actions">
+    <button data-act="feed">🍎 밥주기</button>
+    <button data-act="play">⚽ 놀아주기</button>
+    <button data-act="sleep" id="sleepBtn">🌙 재우기</button>
+    <button data-act="clean">🧹 청소하기</button>
+    <button data-act="water">💧 물 갈기</button>
+    <button id="lampBtn">🔥 히팅램프 끄기</button>
+    <button id="mathBtn">✏️ 수학 미션 <small id="mathLeft"></small></button>
+  </section>
 
-    <footer>
-      <span>v<span id="ver"></span></span>
-      <button id="reset" class="link">처음부터</button>
-    </footer>
-  </main>
-
-  <div id="toast" class="toast"></div>
-
-  <div id="dialog" class="dialog hidden">
-    <div class="card">
-      <h2>알이 부화했어요! 🎉</h2>
-      <p>이름을 지어주세요</p>
-      <input id="name-input" maxlength="10" placeholder="예: 망고" autocomplete="off">
-      <button id="name-ok">좋아요</button>
+  <div id="albumPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="albumTitle">
+      <button id="albumClose" class="m-close" aria-label="닫기">✕</button>
+      <h2 id="albumTitle">📸 가족 앨범</h2>
+      <p id="albumNews" hidden></p>
+      <p id="albumEmpty">아직 사진이 없어요.<br>어른 게코가 알을 낳으면 여기에 사진이 남아요!</p>
+      <div id="albumList"></div>
+      <button id="albumDone" class="m-big">확인</button>
     </div>
   </div>
 
-  <script src="game.js"></script>
+  <div id="mathPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="mathTitle">
+      <button id="mathClose" class="m-close" aria-label="닫기">✕</button>
+      <h2 id="mathTitle">✏️ 수학 미션</h2>
+      <div id="mathIntro">
+        <p>문제 5개 중 <b>4개 이상</b> 맞히면<br>🦴 <b>칼슘 영양제</b>를 받아요!</p>
+        <p class="m-reward" id="mathReward"></p>
+        <div id="mathGrades" role="radiogroup" aria-label="학년">
+          <button data-grade="2" role="radio">2학년<small>+ − ×</small></button>
+          <button data-grade="3" role="radio">3학년<small>+ − × ÷</small></button>
+        </div>
+        <p id="mathToday"></p>
+        <button id="mathStart" class="m-big">시작하기</button>
+      </div>
+      <div id="mathQuiz" hidden>
+        <div id="mathDots"></div>
+        <div id="mathQ"></div>
+        <div id="mathA"></div>
+        <div id="mathFeedback"></div>
+        <div id="mathPad">
+          <button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button>
+          <button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button>
+          <button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button>
+          <button data-key="del" aria-label="지우기">⌫</button><button data-key="0">0</button><button data-key="ok" class="m-ok">확인</button>
+        </div>
+      </div>
+      <div id="mathResult" hidden>
+        <div id="mathScore"></div>
+        <p id="mathMsg"></p>
+        <button id="mathAgain" class="m-big">다시 하기</button>
+        <button id="mathDone" class="link">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="testBar" hidden>
+    <b>🧪 테스트 모드</b> · 성장 <span id="testSpeed"></span>배 · 실제 게코와 따로 저장
+    <div id="testInfo"></div>
+    <button data-skip="60">⏩ 1시간 건너뛰기</button>
+    <button data-skip="480">⏩ 8시간 건너뛰기</button>
+  </section>
+
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.2.0</small></footer>
+</main>
+<script src="game.js"></script>
+<script>
+  // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
 </body>
 </html>
