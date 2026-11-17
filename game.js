@@ -55,6 +55,7 @@ function newState() {
   return { name: "도마", hunger: 80, happy: 80, energy: 80, clean: 80,
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
            temp: 29, lampOn: true, mathGrade: 2, mathDay: "", mathClears: 0,
+           mathSkill: {}, mathWrong: [], treats: 0,
            gen: 1, history: [], born: now, last: now };
 }
 
@@ -65,6 +66,10 @@ function fromSave(s) {
   delete st.poop;
   if (st.mathGrade !== 2 && st.mathGrade !== 3) st.mathGrade = 2; // 1학년이 있던 저장본
   if (typeof s.born !== "number") st.born = st.last - st.ageMin * 60000; // 태어난 시각이 없던 저장본
+  // 실력 기록·오답 노트가 없던 저장본
+  if (!st.mathSkill || typeof st.mathSkill !== "object" || Array.isArray(st.mathSkill)) st.mathSkill = {};
+  if (!Array.isArray(st.mathWrong)) st.mathWrong = [];
+  if (typeof st.treats !== "number") st.treats = 0;
   return st;
 }
 
@@ -283,7 +288,8 @@ function render() {
   $("dark").hidden = !state.sleeping;
   renderBars();
   $("sleepBtn").textContent = state.sleeping ? "☀️ 깨우기" : "🌙 재우기";
-  $("mathLeft").textContent = `오늘 🦴 ${mathLeft()}/${MATH_DAILY}`;
+  $("mathLeft").textContent = `오늘 🦴 ${mathLeft()}/${MATH_DAILY}` + (state.treats ? ` · 🪱 ${state.treats}` : "")
+    + (dueReviews().length ? ` · 📒 복습 ${dueReviews().length}` : "");
   if (document.activeElement !== $("nameInput")) $("nameInput").value = state.name;
 }
 
@@ -484,12 +490,15 @@ function spawn(cls, text, x, y) {
 const FOODS = {
   cricket: { icon: "🦗", hunger: 30, happy: 5, msg: "냠냠! 귀뚜라미 최고!" },
   worm: { icon: "🐛", hunger: 20, happy: 12, msg: "밀웜은 간식이라 너무 맛있어요!" },
+  // 수학 미션 보상. 누에는 영양이 풍부해서 실제로도 좋은 간식이다.
+  silk: { icon: "🪱", hunger: 25, happy: 20, msg: "수학 상으로 받은 누에! 영양 만점이에요!" },
 };
 
 function giveFood(kind) {
   $("foodPicker").style.display = "none";
   const f = FOODS[kind];
-  if (!f) { busy = false; return render(); }
+  if (!f || (kind === "silk" && state.treats < 1)) { busy = false; return render(); }
+  if (kind === "silk") state.treats--;
   sfx("tap");
   const el = spawn("food", f.icon, 12, 15);
   // 먹이는 게코 입 쪽으로 날아간다 (오른쪽을 보면 오른쪽 끝, 왼쪽을 보면 왼쪽 끝)
@@ -664,6 +673,8 @@ const ACTIONS = {
     busy = true;
     render();
     $("bubble").textContent = "무엇을 먹을까요?";
+    $("silkBtn").style.display = state.treats > 0 ? "" : "none";
+    $("silkCount").textContent = "×" + state.treats;
     $("foodPicker").style.display = "";
     stopWalk();
   },
@@ -762,33 +773,221 @@ document.querySelectorAll("[data-food]").forEach((b) =>
 // 영양제는 하루 MATH_DAILY번까지만 주고, 그 뒤로는 연습만 할 수 있다.
 const MATH_COUNT = 5, MATH_PASS = 4, MATH_DAILY = 3;
 const MATH_GROW_MIN = 60, MATH_HAPPY = 15;
-// 학년별로 배우는 연산 (초등 교육과정 기준): 2학년 곱셈구구, 3학년 나눗셈
-const MATH_OPS = { 2: ["+", "-", "×"], 3: ["+", "-", "×", "÷"] };
+// 자동 난이도: 유형마다 레벨 1~3. 처음엔 2(원래 난이도). 연속 LEVEL_UP_STREAK개 맞히면 올라가고,
+// 레벨이 바뀐 뒤 3문제 이상 풀었는데 최근 3문제 중 2개를 틀리면 내려간다.
+const LEVEL_START = 2, LEVEL_MAX = 3, LEVEL_UP_STREAK = 4;
+// 오답 노트: 틀린 문제는 다음 미션에 그대로 다시 나오고(1차 복습), 맞히면 REVIEW_GAP_MS 뒤
+// 숫자만 바뀐 비슷한 문제가 나온다(2차 복습). 그것도 맞히면 졸업. 미션마다 최대 REVIEW_PER_QUIZ개.
+const REVIEW_PER_QUIZ = 2, REVIEW_KEEP = 30, REVIEW_GAP_MS = 20 * 3600000;
+// 보상: 레벨 업 / 오답 졸업 / 만점마다 누에 간식 1개 (밥주기에서 준다)
+const MAX_TREATS = 9;
 const rand = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const today = () => new Date().toDateString();
 const mathLeft = () => Math.max(0, MATH_DAILY - (state.mathDay === today() ? state.mathClears : 0));
 let quiz = null, mathSay = "";
 
-function makeProblem(grade) {
-  const ops = MATH_OPS[grade] || MATH_OPS[2];
-  const op = ops[rand(0, ops.length - 1)];
-  let a, b;
-  if (op === "+") {
-    [a, b] = grade === 2 ? [rand(10, 99), rand(10, 99)] // 두 자리 + 두 자리
-      : [rand(100, 999), rand(100, 999)];              // 세 자리 + 세 자리
-  } else if (op === "-") {
-    // 답이 0보다 작아지지 않게 빼는 수는 항상 작게
-    a = grade === 2 ? rand(20, 99) : rand(200, 999);
-    b = grade === 2 ? rand(10, a) : rand(100, a);
-  } else if (op === "×") {
-    [a, b] = grade === 2 ? [rand(2, 9), rand(1, 9)]   // 곱셈구구
-      : [rand(11, 99), rand(2, 9)];                    // 두 자리 × 한 자리
+// 학년별 문제 유형 (초등 교육과정 기준). fam이 같은 유형끼리는 묶어서 비율을 맞춘다
+// (2학년 구구단이 8개 유형이어도 덧셈·뺄셈·곱셈이 비슷하게 나오게).
+const MATH_TYPES = {
+  2: [
+    { id: "add", fam: "+", name: "받아올림 없는 덧셈" },
+    { id: "addc", fam: "+", name: "받아올림 있는 덧셈" },
+    { id: "sub", fam: "-", name: "받아내림 없는 뺄셈" },
+    { id: "subb", fam: "-", name: "받아내림 있는 뺄셈" },
+    ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
+  ],
+  3: [
+    { id: "add3", fam: "+", name: "세 자리 덧셈" },
+    { id: "sub3", fam: "-", name: "세 자리 뺄셈" },
+    { id: "mul", fam: "×", name: "곱셈" },
+    { id: "div", fam: "÷", name: "나눗셈" },
+  ],
+};
+const ALL_TYPES = Object.values(MATH_TYPES).flat();
+const typeName = (id) => (ALL_TYPES.find((t) => t.id === id) || { name: "" }).name;
+const stars = (lvl) => "★".repeat(lvl) + "☆".repeat(LEVEL_MAX - lvl);
+
+// 자릿수 계산 도우미 (일의 자리부터)
+const digitsOf = (n) => String(n).split("").reverse().map(Number);
+function carries(a, b) {
+  const da = digitsOf(a), db = digitsOf(b);
+  let c = 0, n = 0;
+  for (let i = 0; i < Math.max(da.length, db.length); i++) { c = (da[i] || 0) + (db[i] || 0) + c >= 10 ? 1 : 0; n += c; }
+  return n;
+}
+function borrows(a, b) {
+  const da = digitsOf(a), db = digitsOf(b);
+  let br = 0, n = 0;
+  for (let i = 0; i < da.length; i++) { br = (da[i] || 0) - (db[i] || 0) - br < 0 ? 1 : 0; n += br; }
+  return n;
+}
+// 조건에 맞는 숫자 쌍이 나올 때까지 다시 뽑는다
+function pick(gen, ok) {
+  for (let i = 0; i < 300; i++) { const r = gen(); if (ok(r[0], r[1])) return r; }
+  return gen();
+}
+const blankSide = () => (Math.random() < 0.5 ? "a" : "b");
+
+// 문제 만들기. blank가 있으면 "38 + □ = 65" 같은 빈칸 문제 (덧셈↔뺄셈, 곱셈↔나눗셈 관계를 익힌다)
+function mk(a, op, b, blank) {
+  const res = { "+": a + b, "-": a - b, "×": a * b, "÷": a / b }[op];
+  const sym = op === "-" ? "−" : op;
+  if (blank === "a") return { text: `□ ${sym} ${b} = ${res}`, answer: a };
+  if (blank === "b") return { text: `${a} ${sym} □ = ${res}`, answer: b };
+  return { text: `${a} ${sym} ${b} = ?`, answer: res };
+}
+
+// 유형별 문제 생성기. 레벨 1: 쉬운 문제, 2: 원래 난이도, 3: 빈칸 문제나 더 큰 수
+const GEN = {
+  add(l) {
+    const [a, b] = l === 1 ? pick(() => [rand(10, 89), rand(1, 9)], (a, b) => !carries(a, b))
+      : pick(() => [rand(10, 89), rand(10, 89)], (a, b) => !carries(a, b));
+    return mk(a, "+", b, l === 3 && blankSide());
+  },
+  addc(l) {
+    const [a, b] = l === 1 ? pick(() => [rand(11, 89), rand(2, 9)], (a, b) => carries(a, b) === 1 && a + b < 100)
+      : pick(() => [rand(11, 89), rand(11, 89)], (a, b) => carries(a, b) >= 1);
+    return mk(a, "+", b, l === 3 && blankSide());
+  },
+  sub(l) {
+    const [a, b] = l === 1 ? pick(() => [rand(11, 99), rand(1, 9)], (a, b) => !borrows(a, b))
+      : pick(() => { const a = rand(21, 99); return [a, rand(10, a)]; }, (a, b) => !borrows(a, b));
+    return mk(a, "-", b, l === 3 && blankSide());
+  },
+  subb(l) {
+    const [a, b] = l === 1 ? pick(() => [rand(20, 99), rand(2, 9)], (a, b) => borrows(a, b) === 1)
+      : pick(() => { const a = rand(30, 99); return [a, rand(11, a - 1)]; }, (a, b) => borrows(a, b) >= 1);
+    return mk(a, "-", b, l === 3 && blankSide());
+  },
+  add3(l) {
+    const [a, b] = l === 1 ? pick(() => [rand(100, 899), rand(100, 899)], (a, b) => carries(a, b) === 1 && a + b < 1000)
+      : pick(() => [rand(100, 999), rand(100, 999)], (a, b) => carries(a, b) >= 2);
+    return mk(a, "+", b, l === 3 && blankSide());
+  },
+  sub3(l) {
+    const [a, b] = pick(() => { const a = rand(200, 999); return [a, rand(100, a - 1)]; },
+      (a, b) => (l === 1 ? borrows(a, b) === 1 : borrows(a, b) >= 2));
+    return mk(a, "-", b, l === 3 && blankSide());
+  },
+  mul(l) {
+    if (l === 3) return mk(rand(100, 999), "×", rand(2, 9));           // 세 자리 × 한 자리
+    const [a, b] = pick(() => [rand(11, 99), rand(2, 9)],
+      (a, b) => (l === 1) === digitsOf(a).every((d) => d * b < 10));   // 1: 올림 없음, 2: 올림 있음
+    return mk(a, "×", b);
+  },
+  div(l) {
+    const b = l === 1 ? rand(2, 5) : rand(6, 9), q = rand(1, 9);
+    return mk(b * q, "÷", b, l === 3 && blankSide());
+  },
+};
+// 구구단 n단. 1: ×1~5, 2: ×1~9 (순서도 섞어서 바꿔 곱해도 같다는 걸 익힌다), 3: n × □ = 값
+for (let n = 2; n <= 9; n++) {
+  GEN["m" + n] = (l) => {
+    const k = l === 1 ? rand(1, 5) : rand(1, 9);
+    if (l === 3) return mk(n, "×", k, "b");
+    return Math.random() < 0.5 || l === 1 ? mk(n, "×", k) : mk(k, "×", n);
+  };
+}
+
+// 유형별 실력: lvl(레벨), streak(연속 정답), since(레벨이 바뀐 뒤 푼 수), hist(최근 10문제 1/0)
+function skill(id) {
+  return state.mathSkill[id] || (state.mathSkill[id] = { lvl: LEVEL_START, streak: 0, since: 0, hist: [] });
+}
+const accuracy = (s) => (s.hist.length ? s.hist.reduce((a, b) => a + b, 0) / s.hist.length : 0.5);
+
+// 약한 유형일수록 자주 나온다. 아직 별로 안 풀어 본 유형도 조금 더 자주. 한 미션에 같은 유형은 2개까지.
+function pickType(grade, used) {
+  const types = MATH_TYPES[grade] || MATH_TYPES[2];
+  const famSize = {};
+  types.forEach((t) => { famSize[t.fam] = (famSize[t.fam] || 0) + 1; });
+  const ws = types.map((t) => {
+    if ((used[t.id] || 0) >= 2) return 0;
+    const s = skill(t.id);
+    return (1 / famSize[t.fam]) * (0.5 + 2 * (1 - accuracy(s)) + (s.hist.length < 3 ? 0.5 : 0));
+  });
+  let r = Math.random() * ws.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < types.length; i++) { r -= ws[i]; if (ws[i] > 0 && r <= 0) return types[i]; }
+  return types.find((t, i) => ws[i] > 0) || types[0];
+}
+
+// 답 하나를 기록하고 레벨이 바뀌었으면 "up" / "down"
+function recordSkill(q, ok) {
+  const s = skill(q.type);
+  s.hist.push(ok ? 1 : 0);
+  if (s.hist.length > 10) s.hist.shift();
+  s.since++;
+  if (ok) {
+    s.streak++;
+    if (s.streak >= LEVEL_UP_STREAK && s.lvl < LEVEL_MAX) { s.lvl++; s.streak = 0; s.since = 0; return "up"; }
   } else {
-    b = rand(2, 9);
-    a = b * rand(1, 9);                                // 곱셈구구 안에서 나누어떨어지는 나눗셈
+    s.streak = 0;
+    const last3 = s.hist.slice(-3);
+    if (s.lvl > 1 && s.since >= 3 && last3.filter((x) => !x).length >= 2) { s.lvl--; s.since = 0; return "down"; }
   }
-  const answer = { "+": a + b, "-": a - b, "×": a * b, "÷": a / b }[op];
-  return { text: `${a} ${op === "-" ? "−" : op} ${b}`, answer };
+  return null;
+}
+
+// 오답 노트에 적기 (같은 문제는 한 번만, 오래된 것부터 지운다)
+function addWrong(q) {
+  if (state.mathWrong.some((w) => w.text === q.text)) return;
+  state.mathWrong.push({ id: Date.now() + "-" + rand(0, 9999), type: q.type, lvl: q.lvl,
+    text: q.text, answer: q.answer, fix: 0, due: Date.now() });
+  if (state.mathWrong.length > REVIEW_KEEP) state.mathWrong.shift();
+}
+
+// 복습 결과 반영. 졸업하면 true
+function reviewDone(id, ok) {
+  const w = state.mathWrong.find((x) => x.id === id);
+  if (!w) return false;
+  if (!ok) { w.fix = 0; w.due = Date.now(); return false; }
+  w.fix++;
+  if (w.fix >= 2) { state.mathWrong = state.mathWrong.filter((x) => x !== w); return true; }
+  w.due = Date.now() + REVIEW_GAP_MS;
+  return false;
+}
+
+const dueReviews = () => state.mathWrong.filter((w) => w.due <= Date.now() && GEN[w.type]);
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) { const j = rand(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+  return arr;
+}
+
+function makeQuiz() {
+  const list = [], used = {};
+  const add = (p) => { used[p.type] = (used[p.type] || 0) + 1; list.push(p); };
+  // 1차 복습은 틀렸던 문제 그대로, 2차 복습은 같은 유형·레벨의 새 문제
+  for (const w of dueReviews().sort((a, b) => a.due - b.due).slice(0, REVIEW_PER_QUIZ)) {
+    const p = w.fix === 0 ? { text: w.text, answer: w.answer } : GEN[w.type](w.lvl);
+    add(Object.assign(p, { type: w.type, lvl: w.lvl, reviewId: w.id }));
+  }
+  for (let guard = 0; list.length < MATH_COUNT && guard < 300; guard++) {
+    const t = pickType(state.mathGrade, used);
+    const lvl = skill(t.id).lvl;
+    const p = GEN[t.id](lvl);
+    if (list.some((q) => q.text === p.text)) continue;
+    add(Object.assign(p, { type: t.id, lvl }));
+  }
+  return shuffle(list);
+}
+
+// 수학 미션 첫 화면: 오답 노트 개수 + 유형별 레벨
+function renderSkills() {
+  const due = dueReviews().length, total = state.mathWrong.length;
+  $("mathReview").textContent = !total ? "📒 오답 노트가 비어 있어요"
+    : due ? `📒 오답 노트: 복습할 문제 ${due}개가 이번 미션에 나와요`
+    : `📒 오답 노트: ${total}개 (내일 다시 확인해요)`;
+  const box = $("mathSkills");
+  box.innerHTML = "";
+  for (const t of MATH_TYPES[state.mathGrade] || []) {
+    const s = state.mathSkill[t.id];
+    const el = document.createElement("span");
+    const weak = s && s.hist.length >= 3 && accuracy(s) < 0.6;
+    el.className = weak ? "weak" : "";
+    el.textContent = `${t.name.replace("구구단 ", "")} ${stars(s ? s.lvl : LEVEL_START)}`;
+    el.title = s && s.hist.length ? `최근 정답률 ${Math.round(accuracy(s) * 100)}%` : "아직 안 풀어 봤어요";
+    box.appendChild(el);
+  }
 }
 
 function showMathView(id) {
@@ -823,17 +1022,14 @@ function showMathIntro() {
   $("mathReward").textContent = `성장 ${MATH_GROW_MIN / 60}시간 빨라짐 · 행복 +${MATH_HAPPY}`;
   const left = mathLeft();
   $("mathToday").textContent = left ? `오늘 받을 수 있는 영양제: 🦴 ${left}개`
-    : "오늘 영양제는 다 받았어요! 연습은 계속할 수 있어요";
+    : "오늘 영양제는 다 받았어요! 그래도 레벨 업·오답 졸업·만점이면 🪱 누에 간식을 받아요";
+  renderSkills();
   showMathView("mathIntro");
 }
 
 function startQuiz() {
-  const list = [];
-  while (list.length < MATH_COUNT) {
-    const p = makeProblem(state.mathGrade);
-    if (!list.some((q) => q.text === p.text)) list.push(p);
-  }
-  quiz = { list, i: 0, input: "", results: [], locked: false };
+  const list = makeQuiz();
+  quiz = { list, i: 0, input: "", results: [], locked: false, ups: [], grads: 0 };
   sfx("start");
   showMathView("mathQuiz");
   renderQuiz();
@@ -843,7 +1039,9 @@ function renderQuiz() {
   const q = quiz.list[quiz.i];
   $("mathDots").innerHTML = quiz.list.map((_, i) =>
     `<span class="${quiz.results[i] === true ? "ok" : quiz.results[i] === false ? "no" : i === quiz.i ? "now" : ""}"></span>`).join("");
-  $("mathQ").textContent = q.text + " = ?";
+  $("mathTag").textContent = (q.reviewId ? "🔁 복습 · " : "") + `${typeName(q.type)} ${stars(q.lvl)}`;
+  $("mathTag").classList.toggle("review", !!q.reviewId);
+  $("mathQ").textContent = q.text;
   $("mathA").textContent = quiz.input || " ";
 }
 
@@ -862,9 +1060,20 @@ function checkAnswer() {
   const cur = quiz, q = cur.list[cur.i], ok = Number(cur.input) === q.answer;
   cur.results.push(ok);
   cur.locked = true;
-  sfx(ok ? "catch" : "nope");
+  // 실력 기록 → 오답 노트 → 레벨 업 순서로 반영한다
+  const lv = recordSkill(q, ok);
+  const grad = q.reviewId ? reviewDone(q.reviewId, ok) : false;
+  if (!ok && !q.reviewId) addWrong(q);
+  if (grad) cur.grads++;
+  if (lv === "up") cur.ups.push(q.type);
+  save();
+  sfx(lv === "up" ? "grow" : ok ? "catch" : "nope");
   // 틀리면 정답을 보여 줘서 바로 배우게 한다
-  $("mathFeedback").textContent = ok ? "딩동댕! ⭕" : `아쉬워요! 정답은 ${q.answer}`;
+  let fb = ok ? "딩동댕! ⭕" : `아쉬워요! 정답은 ${q.answer}`;
+  if (grad) fb += "\n🎓 오답 졸업!";
+  if (lv === "up") fb += `\n🎉 ${typeName(q.type)} 레벨 업! ${stars(skill(q.type).lvl)}`;
+  if (!ok) fb += q.reviewId ? "\n다음에 한 번 더 나와요" : "\n📒 오답 노트에 적었어요";
+  $("mathFeedback").textContent = fb;
   $("mathFeedback").className = ok ? "ok" : "no";
   renderQuiz();
   setTimeout(() => {
@@ -876,7 +1085,7 @@ function checkAnswer() {
     $("mathFeedback").className = "";
     if (cur.i < MATH_COUNT) renderQuiz();
     else finishQuiz();
-  }, ok ? 900 : 1800);
+  }, ok ? (grad || lv === "up" ? 1600 : 900) : 2000);
 }
 
 function finishQuiz() {
@@ -896,6 +1105,19 @@ function finishQuiz() {
     msg = "최고예요! 오늘 영양제는 다 받았지만 게코가 기뻐해요";
     mathSay = "공부하는 모습 멋져요!";
     sfx("yay");
+  }
+  // 누에 간식: 레벨 업, 오답 졸업, 만점마다 1개
+  const earned = quiz.ups.length + quiz.grads + (score === MATH_COUNT ? 1 : 0);
+  const got = Math.min(earned, MAX_TREATS - state.treats);
+  if (got > 0) {
+    state.treats += got;
+    save();
+    const why = [quiz.ups.length && `레벨 업 ${quiz.ups.length}`, quiz.grads && `오답 졸업 ${quiz.grads}`,
+      score === MATH_COUNT && "만점"].filter(Boolean).join(" · ");
+    msg += `\n\n🪱 누에 간식 +${got} (${why})\n밥주기에서 줄 수 있어요`;
+    if (!mathSay) mathSay = "누에 간식 받았어요! 밥주기에서 주세요";
+  } else if (earned > 0) {
+    msg += `\n\n🪱 누에 간식이 가득 찼어요 (${MAX_TREATS}개). 먼저 게코에게 주세요!`;
   }
   $("mathMsg").textContent = msg;
   showMathView("mathResult");
@@ -954,6 +1176,7 @@ function layEgg() {
   const keep = {
     history: state.history.concat(parent), gen: state.gen + 1, name: babyName(state.name, state.gen + 1),
     mathGrade: state.mathGrade, mathDay: state.mathDay, mathClears: state.mathClears,
+    mathSkill: state.mathSkill, mathWrong: state.mathWrong, treats: state.treats, // 아이의 실력은 이어진다
     lampOn: state.lampOn, temp: state.temp, water: state.water,
   };
   state = Object.assign(newState(), keep);

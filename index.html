@@ -54,6 +54,7 @@
     <div id="foodPicker" style="display:none">
       <button data-food="cricket">🦗 귀뚜라미</button>
       <button data-food="worm">🐛 밀웜</button>
+      <button data-food="silk" id="silkBtn" style="display:none">🪱 누에 <small id="silkCount"></small></button>
       <button data-food="" class="link">그만두기</button>
     </div>
     <div id="glass"></div>
@@ -101,10 +102,16 @@
           <button data-grade="3" role="radio">3학년<small>+ − × ÷</small></button>
         </div>
         <p id="mathToday"></p>
+        <p id="mathReview"></p>
+        <div id="mathSkillsBox">
+          <b>내 실력</b> <small>(4문제 연속 맞히면 ★ 레벨 업!)</small>
+          <div id="mathSkills"></div>
+        </div>
         <button id="mathStart" class="m-big">시작하기</button>
       </div>
       <div id="mathQuiz" hidden>
         <div id="mathDots"></div>
+        <div id="mathTag"></div>
         <div id="mathQ"></div>
         <div id="mathA"></div>
         <div id="mathFeedback"></div>
@@ -131,7 +138,7 @@
     <button data-skip="480">⏩ 8시간 건너뛰기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.2.1</small></footer>
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.3.0</small></footer>
 </main>
 <script src="game.js"></script>
 <script>
