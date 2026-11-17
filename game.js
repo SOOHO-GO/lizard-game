@@ -64,6 +64,7 @@ function newState() {
            temp: 29, lampOn: true, mathGrade: 2, mathDay: "", mathClears: 0,
            mathSkill: {}, mathWrong: [], treats: 0,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
+           stats: {}, decor: [], decorGot: [], decorSeen: [],
            gen: 1, history: [], born: now, last: now };
 }
 
@@ -78,6 +79,9 @@ function fromSave(s) {
   if (!st.mathSkill || typeof st.mathSkill !== "object" || Array.isArray(st.mathSkill)) st.mathSkill = {};
   if (!Array.isArray(st.mathWrong)) st.mathWrong = [];
   if (typeof st.treats !== "number") st.treats = 0;
+  // 꾸미기가 없던 저장본
+  if (!st.stats || typeof st.stats !== "object") st.stats = {};
+  for (const k of ["decor", "decorGot", "decorSeen"]) if (!Array.isArray(st[k])) st[k] = [];
   return st;
 }
 
@@ -188,7 +192,7 @@ function tick() {
   if (state.careMin >= LAY_GOAL.care && !busy) return layEgg();
   // 꺼 둔 사이에 허물 벗을 준비가 끝났으면, 그 사이에 벗고 먹은 것으로 친다
   let shedAway = false;
-  if (!online && state.shedPhase === "ready") { state.shedPhase = "done"; shedAway = true; }
+  if (!online && state.shedPhase === "ready") { state.shedPhase = "done"; shedAway = true; bump("shed"); }
   save();
   render();
   const after = stage();
@@ -358,6 +362,8 @@ function render() {
   if (document.activeElement !== $("nameInput")) $("nameInput").value = state.name;
   renderLight();
   fogKick();
+  checkDecor();
+  $("decorNew").hidden = !state.decorGot.some((id) => !state.decorSeen.includes(id));
 }
 
 // ---- 소리 ----
@@ -692,6 +698,7 @@ function pickPoop(el) {
   if (el.dataset.picked || (busy && !cleaning)) return;
   el.dataset.picked = "1";
   state.poopCount = Math.max(0, state.poopCount - 1);
+  bump("poop");
   sfx("pick");
   el.classList.add("picked");
   const tongs = spawn("tongs", "🥢", parseFloat(el.style.left), parseFloat(el.style.top) - 10);
@@ -732,6 +739,7 @@ function changeWater() {
   tick();
   sfx("water");
   state.water = 100;
+  bump("water");
   state.humidity = clamp(state.humidity + WATER_HUMID_UP);
   state.happy = clamp(state.happy + 3);
   sparkle(4, 85, 88, 14);
@@ -1181,7 +1189,7 @@ function checkAnswer() {
   const lv = recordSkill(q, ok);
   const grad = q.reviewId ? reviewDone(q.reviewId, ok) : false;
   if (!ok && !q.reviewId) addWrong(q);
-  if (grad) cur.grads++;
+  if (grad) { cur.grads++; bump("grads"); }
   if (lv === "up") cur.ups.push(q.type);
   save();
   sfx(lv === "up" ? "grow" : ok ? "catch" : "nope");
@@ -1213,9 +1221,11 @@ function finishQuiz() {
     msg = `아깝다! ${MATH_PASS}개 이상 맞히면 영양제를 받아요`;
     sfx("tap");
   } else if (mathLeft()) {
+    bump("mathPass");
     msg = giveCalcium();
   } else {
     // 하루 영양제는 다 받았어도 공부한 만큼 조금 기뻐한다
+    bump("mathPass");
     tick();
     state.happy = clamp(state.happy + 5);
     save();
@@ -1295,6 +1305,7 @@ function layEgg() {
     mathGrade: state.mathGrade, mathDay: state.mathDay, mathClears: state.mathClears,
     mathSkill: state.mathSkill, mathWrong: state.mathWrong, treats: state.treats, // 아이의 실력은 이어진다
     lampOn: state.lampOn, temp: state.temp, water: state.water, humidity: state.humidity,
+    stats: state.stats, decor: state.decor, decorGot: state.decorGot, decorSeen: state.decorSeen, // 꾸민 사육장은 그대로
   };
   state = Object.assign(newState(), keep);
   save();
@@ -1681,7 +1692,7 @@ function wipeFog(x0, y0, x1, y1) {
 const roomEl = $("room");
 let gesture = null;
 roomEl.addEventListener("pointerdown", (e) => {
-  if (hunt || hideGame) return; // 놀이 중에는 유리 두드리기·닦기를 하지 않는다
+  if (hunt || hideGame || decorating) return; // 놀이·꾸미기 중에는 유리 두드리기·닦기를 하지 않는다
   if (e.target.closest("#pet, #dish, #lamp, .poop, .bug, #foodPicker, #playPicker, button")) return;
   gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: Date.now(), moved: false };
   if (roomEl.classList.contains("foggy")) { try { roomEl.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ } }
@@ -1850,6 +1861,7 @@ function endHunt() {
   state.happy = clamp(state.happy + 8 + h.caught * 4);
   state.hunger = clamp(state.hunger + h.caught * 6);
   state.energy = clamp(state.energy - 8);
+  if (h.caught >= HUNT_GOAL) bump("huntPerfect");
   if (h.caught && state.digest.length < MAX_DIGEST) {
     state.digest.push(state.ageMin + DIGEST_MIN + Math.random() * DIGEST_RAND);
     state.digest.sort((a, b) => a - b);
@@ -1971,11 +1983,246 @@ function endHide() {
   tick();
   state.happy = clamp(state.happy + 8 + g.found * 5);
   state.energy = clamp(state.energy - 6);
+  if (g.found === HIDE_ROUNDS) bump("hidePerfect");
   busy = false;
   sfx(g.found ? "yay" : "tap");
   say(g.found === HIDE_ROUNDS ? "3번 모두 찾았어요! 눈이 정말 좋아요 👀" : `${HIDE_ROUNDS}번 중 ${g.found}번 찾았어요!`);
   wander();
 }
+
+// ================= 사육장 꾸미기 =================
+// 장식은 돌보기·수학·놀이를 하면서 하나씩 열린다. size: 사육장 너비에 대한 크기(%)
+// how: 얻는 방법, ok: 열리는 조건, goal: [지금, 목표] (진행 막대를 보여 준다)
+const stat = (k) => state.stats[k] || 0;
+const stageNo = () => STAGES.indexOf(stage());
+const DECOR = [
+  { id: "rock", icon: "🪨", name: "돌", size: 13, how: "처음부터 있어요" },
+  { id: "grass", icon: "🌿", name: "풀", size: 12, how: "처음부터 있어요" },
+  { id: "log", icon: "🪵", name: "통나무", size: 18, how: "알에서 태어나면", ok: () => stageNo() >= 1 },
+  { id: "shell", icon: "🐚", name: "조개껍데기", size: 9, how: "수학 미션 통과 1번", goal: () => [stat("mathPass"), 1] },
+  { id: "mushroom", icon: "🍄", name: "버섯", size: 10, how: "응가 치우기 10번", goal: () => [stat("poop"), 10] },
+  { id: "cactus", icon: "🌵", name: "선인장", size: 15, how: "물 갈아주기 7번", goal: () => [stat("water"), 7] },
+  { id: "bone", icon: "🦴", name: "뼈 화석", size: 13, how: "어린 게코로 자라기", ok: () => stageNo() >= 2 },
+  { id: "flower", icon: "🌺", name: "꽃", size: 11, how: "수학 한 종류 ★★★ 만들기",
+    ok: () => Object.values(state.mathSkill).some((s) => s && s.lvl >= 3) },
+  { id: "amphora", icon: "🏺", name: "항아리", size: 15, how: "허물 벗기 1번", goal: () => [stat("shed"), 1] },
+  { id: "crystal", icon: "💎", name: "수정", size: 10, how: "오답 노트 졸업 5개", goal: () => [stat("grads"), 5] },
+  { id: "palm", icon: "🌴", name: "야자나무", size: 22, how: "사냥 놀이 3마리 모두 잡기", goal: () => [stat("huntPerfect"), 1] },
+  { id: "moai", icon: "🗿", name: "석상", size: 16, how: "숨바꼭질 3번 모두 찾기", goal: () => [stat("hidePerfect"), 1] },
+  { id: "castle", icon: "🏰", name: "성", size: 22, how: "어른 게코로 자라기", ok: () => stageNo() >= 3 },
+  { id: "crown", icon: "👑", name: "왕관", size: 9, how: "2대 게코 키우기", ok: () => state.gen >= 2 },
+];
+const MAX_DECOR = 12, DECOR_SCALE = [0.6, 1.8];
+const decorDef = (id) => DECOR.find((d) => d.id === id);
+function decorReady(d) {
+  if (d.ok) return d.ok();
+  if (d.goal) { const [now, need] = d.goal(); return now >= need; }
+  return true;
+}
+function bump(k) { state.stats[k] = stat(k) + 1; }
+
+// 새로 열린 장식이 있으면 알려 준다 (놀이·미션 중에는 끝난 뒤에)
+function checkDecor() {
+  if (busy) return;
+  const fresh = DECOR.filter((d) => !state.decorGot.includes(d.id) && decorReady(d));
+  if (!fresh.length) return;
+  fresh.forEach((d) => state.decorGot.push(d.id));
+  save();
+  sfx("yay");
+  say(fresh.length === 1 ? `🎁 새 장식을 얻었어요! ${fresh[0].icon} ${fresh[0].name}` : `🎁 새 장식 ${fresh.length}개! 🎨 꾸미기를 눌러 봐요`);
+}
+
+// 놓은 장식 그리기. 크기는 사육장 너비를 기준으로 정한다 (가로·세로 화면 모두 같은 비율)
+let decorating = false, selDecor = -1;
+function decorPx(item) {
+  const d = decorDef(item.id);
+  return $("room").clientWidth * (d ? d.size : 12) / 100 * (item.s || 1);
+}
+function renderDecor() {
+  const layer = $("decorLayer");
+  layer.innerHTML = "";
+  state.decor.forEach((item, i) => {
+    const d = decorDef(item.id);
+    if (!d) return;
+    const el = document.createElement("div");
+    el.className = "decor-item" + (decorating && i === selDecor ? " sel" : "");
+    el.textContent = d.icon;
+    el.dataset.i = i;
+    el.style.left = item.x + "%";
+    el.style.top = item.y + "%";
+    el.style.fontSize = decorPx(item).toFixed(1) + "px";
+    el.style.setProperty("--flip", item.f || 1);
+    layer.appendChild(el);
+  });
+  placeTools();
+}
+if (window.ResizeObserver) new ResizeObserver(() => renderDecor()).observe($("room"));
+else window.addEventListener("resize", renderDecor);
+
+// 고른 장식 위에 도구(뒤집기·작게·크게·빼기)를 띄운다
+function placeTools() {
+  const tools = $("decorTools"), item = state.decor[selDecor];
+  if (!decorating || !item) { tools.hidden = true; return; }
+  tools.hidden = false;
+  const h = decorPx(item), roomH = $("room").clientHeight;
+  const topPx = item.y / 100 * roomH - h - 10;
+  tools.style.left = Math.max(18, Math.min(82, item.x)) + "%";
+  if (topPx > 60) { tools.style.top = topPx + "px"; tools.style.transform = "translate(-50%, -100%)"; }
+  else { tools.style.top = `calc(${item.y}% + 8px)`; tools.style.transform = "translate(-50%, 0)"; }
+}
+document.querySelectorAll("[data-tool]").forEach((b) => b.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const item = state.decor[selDecor];
+  if (!item) return;
+  const t = b.dataset.tool;
+  if (t === "flip") item.f = -(item.f || 1);
+  else if (t === "smaller") item.s = Math.max(DECOR_SCALE[0], +((item.s || 1) - 0.2).toFixed(1));
+  else if (t === "bigger") item.s = Math.min(DECOR_SCALE[1], +((item.s || 1) + 0.2).toFixed(1));
+  else if (t === "remove") { state.decor.splice(selDecor, 1); selDecor = -1; }
+  sfx(t === "remove" ? "pick" : "tap");
+  save();
+  renderDecor();
+  renderTray();
+}));
+
+// 장식함
+function renderTray() {
+  const list = $("decorList");
+  list.innerHTML = "";
+  $("decorCount").textContent = `놓은 장식 ${state.decor.length}/${MAX_DECOR}`;
+  for (const d of DECOR) {
+    const got = state.decorGot.includes(d.id);
+    const el = document.createElement("div");
+    el.className = "tray-item" + (got ? "" : " locked");
+    el.dataset.id = d.id;
+    let html = `<span class="ti-icon">${d.icon}</span><span class="ti-name">${got ? d.name : "🔒 " + d.name}</span>`;
+    if (!got) {
+      html += `<span class="ti-how">${d.how}</span>`;
+      if (d.goal) {
+        const [now, need] = d.goal();
+        html += `<span class="ti-bar"><i style="width:${Math.min(100, now / need * 100)}%"></i></span>`;
+      }
+    } else if (!state.decorSeen.includes(d.id)) html += `<span class="ti-new">NEW</span>`;
+    el.innerHTML = html;
+    if (got) el.addEventListener("pointerdown", (e) => startTrayDrag(e, d));
+    list.appendChild(el);
+  }
+}
+
+function openDecor() {
+  if (busy) return;
+  tick();
+  busy = true;
+  decorating = true;
+  selDecor = -1;
+  stopWalk();
+  $("room").classList.add("decorating");
+  renderTray();
+  $("decorTray").hidden = false;
+  state.decorSeen = state.decorGot.slice(); // 장식함을 열었으니 NEW 표시는 이번까지만
+  save();
+  renderDecor();
+  render();
+  $("bubble").textContent = "어떻게 꾸며 줄까요? 🎨";
+  sfx("tap");
+}
+function closeDecor() {
+  decorating = false;
+  selDecor = -1;
+  $("room").classList.remove("decorating");
+  $("decorTray").hidden = true;
+  busy = false;
+  save();
+  renderDecor();
+  render();
+  say(state.decor.length ? "멋진 집이 됐어요! 고마워요 🦎" : "다음에 꾸며 줘요!");
+  wander();
+}
+$("decorBtn").addEventListener("click", openDecor);
+$("decorDone").addEventListener("click", closeDecor);
+
+// 장식함에서 끌어다 사육장에 놓기
+function startTrayDrag(e, d) {
+  e.preventDefault();
+  if (state.decor.length >= MAX_DECOR) { nope(`장식은 ${MAX_DECOR}개까지 놓을 수 있어요`); return; }
+  const src = e.currentTarget;
+  const ghost = document.createElement("div");
+  ghost.className = "decor-ghost";
+  ghost.textContent = d.icon;
+  ghost.style.fontSize = decorPx({ id: d.id }) + "px";
+  document.body.appendChild(ghost);
+  const move = (ev) => { ghost.style.left = ev.clientX + "px"; ghost.style.top = ev.clientY + "px"; };
+  move(e);
+  sfx("tap");
+  try { src.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+  const up = (ev) => {
+    src.removeEventListener("pointermove", move);
+    src.removeEventListener("pointerup", up);
+    src.removeEventListener("pointercancel", up);
+    ghost.remove();
+    const r = $("room").getBoundingClientRect();
+    if (ev.type === "pointerup" && ev.clientX > r.left && ev.clientX < r.right && ev.clientY > r.top && ev.clientY < r.bottom) {
+      state.decor.push({ id: d.id, x: decorX((ev.clientX - r.left) / r.width * 100), y: decorY((ev.clientY - r.top) / r.height * 100), s: 1, f: 1 });
+      selDecor = state.decor.length - 1;
+      sfx("pick");
+      save();
+      renderDecor();
+      renderTray();
+    }
+  };
+  src.addEventListener("pointermove", move);
+  src.addEventListener("pointerup", up);
+  src.addEventListener("pointercancel", up);
+}
+const decorX = (x) => Math.max(3, Math.min(97, +x.toFixed(1)));
+const decorY = (y) => Math.max(14, Math.min(99, +y.toFixed(1)));
+
+// 놓은 장식: 톡 누르면 고르기, 끌면 옮기기, 장식함 위에 놓으면 빼기
+$("decorLayer").addEventListener("pointerdown", (e) => {
+  const el = e.target.closest(".decor-item");
+  if (!decorating || !el) return;
+  e.stopPropagation();
+  const i = +el.dataset.i, item = state.decor[i];
+  const start = { x: e.clientX, y: e.clientY }, r = $("room").getBoundingClientRect();
+  let moved = false;
+  try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+  const move = (ev) => {
+    if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 6) return;
+    moved = true;
+    el.classList.add("dragging");
+    $("decorTools").hidden = true;
+    item.x = decorX((ev.clientX - r.left) / r.width * 100);
+    item.y = decorY((ev.clientY - r.top) / r.height * 100);
+    el.style.left = item.x + "%";
+    el.style.top = item.y + "%";
+  };
+  const up = (ev) => {
+    el.removeEventListener("pointermove", move);
+    el.removeEventListener("pointerup", up);
+    el.removeEventListener("pointercancel", up);
+    const tr = $("decorTray").getBoundingClientRect();
+    if (moved && ev.clientX > tr.left && ev.clientX < tr.right && ev.clientY > tr.top && ev.clientY < tr.bottom) {
+      state.decor.splice(i, 1); // 장식함으로 되돌려 놓으면 뺀다
+      selDecor = -1;
+      sfx("pick");
+    } else if (moved) {
+      selDecor = i;
+      sfx("tap");
+    } else {
+      selDecor = selDecor === i ? -1 : i;
+    }
+    save();
+    renderDecor();
+    renderTray();
+  };
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", up);
+});
+// 빈 곳을 누르면 고른 것을 놓아준다
+$("room").addEventListener("pointerdown", (e) => {
+  if (decorating && !e.target.closest(".decor-item, #decorTools") && selDecor >= 0) { selDecor = -1; renderDecor(); }
+});
 
 // ---- 탈피: 벽에 몸을 비벼 허물을 벗고, 벗은 허물을 먹는다 ----
 const SKIN_SVG = `<svg viewBox="0 0 80 30" aria-hidden="true">
@@ -2001,7 +2248,7 @@ function playShed() {
       f.style.setProperty("--dx", (Math.random() * 30 - 15).toFixed(0) + "px");
       setTimeout(() => f.remove(), 1600);
       n++;
-      if (n === 4) { state.shedPhase = "done"; save(); render(); } // 하얀 허물이 벗겨지며 원래 색으로
+      if (n === 4) { state.shedPhase = "done"; bump("shed"); save(); render(); } // 하얀 허물이 벗겨지며 원래 색으로
       if (n % 4 === 0) sfx("rustle");
     }, 220);
     setTimeout(() => {
@@ -2073,5 +2320,6 @@ render();
 wander();
 loadFromServer().then(() => {
   if (!serverReady && !noServer) setInterval(() => { if (!serverReady && !noServer) loadFromServer(); }, 15000);
+  renderDecor(); // 서버에서 불러온 꾸미기 반영
   tick();
 });
