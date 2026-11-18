@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.10.1">
+<link rel="stylesheet" href="style.css?v=0.11.0">
 </head>
 <body>
 <main id="app">
@@ -17,6 +17,7 @@
     <a id="helpLink" href="help.html">📖 게코 키우기 안내서</a>
     <button id="albumBtn">📸 가족 앨범</button>
     <button id="decorBtn">🎨 꾸미기 <span id="decorNew" hidden>NEW</span></button>
+    <button id="shopBtn">🛒 상점 <span id="coinLabel">🪙 0</span></button>
   </nav>
 
   <section id="nameRow">
@@ -78,16 +79,34 @@
         <path d="M40 18c6-4 13-6 19-5M84 10c6 0 11 2 15 5" stroke="#6b8f45" stroke-width="5" stroke-linecap="round" fill="none"/>
         <g fill="#7fa857"><circle cx="46" cy="14" r="1.6"/><circle cx="54" cy="12" r="1.3"/><circle cx="90" cy="10" r="1.4"/></g>
         <path d="M44 80c0-23 11-35 26-35s27 12 27 35z" fill="url(#hideIn)"/>
+        <!-- 상점 업그레이드 2단계: 이끼 동굴 (3단계에도 남는다) -->
+        <g id="hideMoss">
+          <path d="M14 40c8-14 22-24 40-28 18-4 38-1 52 10 8 6 14 14 18 24" stroke="#5f9e4f" stroke-width="9" stroke-linecap="round" fill="none" opacity=".92"/>
+          <path d="M20 36c10-12 24-19 38-21M92 16c12 5 22 14 27 24" stroke="#8cc56a" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+          <path d="M6 70c2-8 6-14 12-18M134 68c-1-8-4-14-9-18" stroke="#5f9e4f" stroke-width="6" stroke-linecap="round" fill="none"/>
+          <g fill="#ffd1e8"><circle cx="36" cy="20" r="2.6"/><circle cx="76" cy="8" r="2.4"/><circle cx="112" cy="24" r="2.6"/></g>
+          <g fill="#ffeb3b"><circle cx="36" cy="20" r="1"/><circle cx="76" cy="8" r="1"/><circle cx="112" cy="24" r="1"/></g>
+        </g>
+        <!-- 3단계: 수정 동굴 -->
+        <g id="hideGems">
+          <polygon points="100,80 106,54 112,80" fill="#b39ddb"/><polygon points="106,80 106,54 112,80" fill="#9575cd"/>
+          <polygon points="112,80 120,62 127,80" fill="#80deea"/><polygon points="120,80 120,62 127,80" fill="#4dd0e1"/>
+          <polygon points="20,80 27,58 33,80" fill="#f48fb1"/><polygon points="27,80 27,58 33,80" fill="#ec407a"/>
+          <path d="M103 64l2-6M23 70l2-7M115 72l2-5" stroke="#fff" stroke-width="1.4" stroke-linecap="round" opacity=".9"/>
+        </g>
       </svg>
       <!-- 도자기 물그릇 (#waterFill은 물의 양에 따라 game.js가 바꾼다) -->
       <svg class="d-dish" id="dish" viewBox="0 0 90 32" aria-label="물그릇">
         <defs><linearGradient id="bowlG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ece7df"/><stop offset="1" stop-color="#9e9487"/></linearGradient></defs>
         <ellipse cx="46" cy="27" rx="42" ry="5" fill="#000" opacity=".25"/>
         <path d="M2 15Q5 30 45 30T88 15z" fill="url(#bowlG)"/>
-        <ellipse cx="45" cy="15" rx="43" ry="10" fill="#dcd5ca" stroke="#b3a99c"/>
+        <ellipse id="dishRim" cx="45" cy="15" rx="43" ry="10" fill="#dcd5ca" stroke="#b3a99c"/>
         <ellipse cx="45" cy="15.5" rx="38" ry="8.3" fill="#8d8478"/>
         <ellipse id="waterFill" cx="45" cy="15" rx="37" ry="8" fill="#6ec6ff"/>
         <ellipse cx="33" cy="12.5" rx="10" ry="2" fill="#fff9"/>
+        <!-- 상점 업그레이드 3단계: 퐁퐁 물결 -->
+        <ellipse id="dishRipple" class="ripple" cx="48" cy="15" rx="9" ry="2.2" fill="none" stroke="#fff" stroke-width="1.1"/>
+        <ellipse class="ripple r2" cx="48" cy="15" rx="9" ry="2.2" fill="none" stroke="#fff" stroke-width="1.1"/>
       </svg>
       <!-- 바닥의 작은 풀 -->
       <svg class="d-tuft t1" viewBox="0 0 40 24" aria-hidden="true"><path d="M20 24C18 14 12 8 4 4c8 2 13 8 16 20 1-10 4-18 10-22-4 8-6 14-6 22 3-6 7-10 14-12-6 4-9 8-10 12z" fill="#6c9a4a"/></svg>
@@ -187,6 +206,21 @@
     <div id="decorList"></div>
   </div>
 
+  <div id="shopPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="shopTitle">
+      <button id="shopClose" class="m-close" aria-label="닫기">✕</button>
+      <h2 id="shopTitle">🛒 게코 상점</h2>
+      <p class="shop-coins">내 코인 <b id="shopCoins">🪙 0</b></p>
+      <p class="shop-hint">⚽ 놀아주기를 하면 코인을 모을 수 있어요</p>
+      <p id="shopMsg"></p>
+      <h3>🏠 사육장 업그레이드</h3>
+      <div id="shopUps"></div>
+      <h3>🎨 장식</h3>
+      <div id="shopDecor"></div>
+      <button id="shopDone" class="m-big">다 샀어요</button>
+    </div>
+  </div>
+
   <div id="mathPanel" class="m-panel" hidden>
     <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="mathTitle">
       <button id="mathClose" class="m-close" aria-label="닫기">✕</button>
@@ -195,7 +229,7 @@
         <p>문제 5개 중 <b>4개 이상</b> 맞히면<br>🦴 <b>칼슘 영양제</b>를 받아요!</p>
         <p class="m-reward" id="mathReward"></p>
         <div id="mathGrades" role="radiogroup" aria-label="학년">
-          <button data-grade="2" role="radio">2학년<small>+ − ×</small></button>
+          <button data-grade="2" role="radio">2학년<small>× 구구단</small></button>
           <button data-grade="3" role="radio">3학년<small>+ − × ÷</small></button>
         </div>
         <p id="mathToday"></p>
@@ -237,9 +271,9 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.10.1</small></footer>
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.11.0</small></footer>
 </main>
-<script src="game.js?v=0.10.1"></script>
+<script src="game.js?v=0.11.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

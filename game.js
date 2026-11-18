@@ -8,19 +8,21 @@ const TEST = TEST_SPEED > 1;
 const SAVE_KEY = "critter-craft-v1" + (TEST ? "-test" : "");
 const MAX_OFFLINE_MIN = 24 * 60; // 오래 자리를 비워도 최대 24시간치만 반영
 const OFFLINE_GAP_MIN = 2;       // 이보다 오래 계산이 멈췄으면 게임을 꺼 둔 것으로 본다
-const OFFLINE_FACTOR = 0.15;     // 꺼 둔 동안은 상태가 0.15배 속도로 줄어든다
+const OFFLINE_FACTOR = 0.2;      // 꺼 둔 동안은 상태가 0.2배 속도로 줄어든다
 const STEP_MIN = 5;              // 긴 시간은 5분씩 나눠 계산 (돌봄 여부를 중간중간 확인)
 // 분당 변화량 (밤에 자는 중에는 SLEEP_* 적용)
 // clean은 사육장 깨끗함. 대부분 응가 때문에 더러워지고, 바닥재 먼지로 조금씩 줄어든다.
-const DECAY = { hunger: 1.8, happy: 0.8, energy: 1.0, clean: 0.3 };
-const SLEEP = { hunger: 0.4, happy: 0.1, energy: -4, clean: 0.05 };
-// 응가: 먹고 나서 45~90분 뒤에 나온다 (실제 소화보다 빠르게 해서 자주 치우게). 레오파드 게코는 한쪽 구석에만 응가한다.
-const DIGEST_MIN = 45, DIGEST_RAND = 45, MAX_DIGEST = 5, MAX_POOP = 3;
-const POOP_DIRT = 0.4; // 응가 하나당 분당 깨끗함 감소
+// v0.11.0: 아이 요청으로 난이도를 올렸다 (원래 hunger 1.8, happy 0.8, energy 1.0, clean 0.3)
+const DECAY = { hunger: 2.3, happy: 1.05, energy: 1.25, clean: 0.38 };
+const SLEEP = { hunger: 0.5, happy: 0.15, energy: -4, clean: 0.05 };
+// 응가: 먹고 나서 15~35분 뒤에 나온다 (실제 소화보다 훨씬 빠르게 해서 자주 치우게). 레오파드 게코는 한쪽 구석에만 응가한다.
+const DIGEST_MIN = 15, DIGEST_RAND = 20, MAX_DIGEST = 6, MAX_POOP = 5;
+const POOP_DIRT = 0.45; // 응가 하나당 분당 깨끗함 감소
 // 물그릇: 하루쯤 지나면 물을 갈아줘야 한다. 꺼 둔 동안에도 같은 속도로 줄어든다(매일 물 갈기 습관).
-const WATER_RATE = 0.07, THIRSTY = 20;
+// 상점에서 물그릇을 업그레이드하면 천천히 줄어든다.
+const WATER_RATE = 0.09, THIRSTY = 20;
 // 평균 상태가 이 이상인 시간만 성장 시간(careMin)으로 친다. 알은 돌볼 수 없으니 시간만 흐르면 된다.
-const CARE_AVG = 50;
+const CARE_AVG = 55;
 // 성장 단계: care = 그 단계가 되기 위해 필요한 누적 성장 시간(분)
 // key는 이미지 파일 이름에 쓰인다: assets/lizard/<key>_<기분>.png
 const STAGES = [
@@ -67,6 +69,31 @@ const MIST_UP = 30, WATER_HUMID_UP = 8, TOO_HUMID = 85;
 // 탈피: 다음 성장 단계까지 SHED_AT% 오면 몸이 하얘지고(탈피 직전),
 // 습도 SHED_HUMID% 이상인 시간이 SHED_WET_MIN분 쌓이면 허물을 벗는다.
 const SHED_AT = 80, SHED_HUMID = 60, SHED_WET_MIN = 30;
+// 상점 업그레이드: 놀아주기로 모은 코인으로 사육장을 좋게 바꾼다. 단계는 1(처음)~3.
+// fx: 단계별 배율 (hide.happy: 심심해지는 속도, hide.rest: 잘 때 에너지 회복, dish.water: 물이 줄어드는 속도,
+//     floor.dust: 먼지로 더러워지는 속도, floor.poop: 응가 때문에 더러워지는 속도)
+const UPGRADES = [
+  { id: "hide", icon: "🪨", name: "은신처", fx: { happy: [1, 0.85, 0.7], rest: [1, 1.3, 1.6] }, levels: [
+    { name: "바위 동굴" },
+    { name: "이끼 동굴", price: 40, desc: "덜 심심해요 · 잘 때 에너지가 더 빨리 차요" },
+    { name: "수정 동굴", price: 100, desc: "훨씬 덜 심심해요 · 아주 푹 자요" },
+  ] },
+  { id: "dish", icon: "💧", name: "물그릇", fx: { water: [1, 0.65, 0.4] }, levels: [
+    { name: "도자기 물그릇" },
+    { name: "큰 파란 물그릇", price: 30, desc: "물이 더 천천히 줄어요" },
+    { name: "황금 샘물 그릇", price: 80, desc: "물이 아주 천천히 줄어요 · 퐁퐁 물결" },
+  ] },
+  { id: "floor", icon: "🏖️", name: "바닥재", fx: { dust: [1, 0.6, 0.3], poop: [1, 0.8, 0.6] }, levels: [
+    { name: "모래 바닥" },
+    { name: "부드러운 흙", price: 35, desc: "사육장이 덜 더러워져요" },
+    { name: "숲속 이끼 흙", price: 90, desc: "사육장이 훨씬 덜 더러워져요" },
+  ] },
+];
+const upDef = (id) => UPGRADES.find((u) => u.id === id);
+const upLv = (id) => Math.max(1, Math.min(3, Math.floor(state.upgrades[id]) || 1));
+const upFx = (id, k) => upDef(id).fx[k][upLv(id) - 1];
+// 놀이 코인: 벌레 1마리 1개, 사냥 1마리 3개, 숨바꼭질 1번 찾기 3개, 놀이를 완벽하게 하면 보너스
+const COIN = { bug: 1, hunt: 3, hide: 3, perfect: 3 };
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -78,7 +105,7 @@ function newState() {
            temp: 29, lampOn: true, mathGrade: 2, mathDay: "", mathClears: 0,
            mathSkill: {}, mathWrong: [], treats: 0,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
-           stats: {}, decor: [], decorGot: [], decorSeen: [],
+           stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
            gen: 1, history: [], morph: null, born: now, last: now };
 }
 
@@ -98,6 +125,9 @@ function fromSave(s) {
   // 꾸미기가 없던 저장본
   if (!st.stats || typeof st.stats !== "object") st.stats = {};
   for (const k of ["decor", "decorGot", "decorSeen"]) if (!Array.isArray(st[k])) st[k] = [];
+  // 상점이 없던 저장본
+  if (typeof st.coins !== "number" || !(st.coins >= 0)) st.coins = 0;
+  if (!st.upgrades || typeof st.upgrades !== "object" || Array.isArray(st.upgrades)) st.upgrades = {};
   return st;
 }
 
@@ -164,19 +194,21 @@ function step(min, f) {
   const r = state.sleeping ? SLEEP : DECAY;
   const e = TEMP_EFFECT[tempZone()] || NO_EFFECT;
   if (isCared()) state.careMin += min * TEST_SPEED;
+  // 상점 업그레이드: 좋은 은신처는 덜 심심하고 푹 자고, 좋은 바닥재는 먼지가 덜 난다
+  const up = { hunger: 1, happy: upFx("hide", "happy"), energy: 1, clean: upFx("floor", "dust") };
   for (const k of ["hunger", "happy", "energy", "clean"]) {
-    state[k] = clamp(state[k] - (r[k] > 0 ? r[k] * f * e[k] : r[k] * e.rest) * min);
+    state[k] = clamp(state[k] - (r[k] > 0 ? r[k] * f * e[k] * up[k] : r[k] * e.rest * upFx("hide", "rest")) * min);
   }
   const target = f < 1 ? AUTO_TEMP[state.sleeping ? "night" : "day"] : state.lampOn ? LAMP_MAX : ROOM_TEMP;
   state.temp += (target - state.temp) * (1 - Math.exp(-TEMP_RATE * min));
   state.ageMin += min;
   if (state.sleeping && state.energy >= 100) state.sleeping = false;
-  state.water = clamp(state.water - WATER_RATE * min);
+  state.water = clamp(state.water - WATER_RATE * upFx("dish", "water") * min);
   while (state.digest.length && state.digest[0] <= state.ageMin) {
     state.digest.shift();
     state.poopCount = Math.min(MAX_POOP, state.poopCount + 1);
   }
-  state.clean = clamp(state.clean - POOP_DIRT * state.poopCount * f * min);
+  state.clean = clamp(state.clean - POOP_DIRT * upFx("floor", "poop") * state.poopCount * f * min);
   const dry = state.lampOn ? HUMID_DRY.lampOn : HUMID_DRY.lampOff;
   state.humidity = clamp(state.humidity + (dry - state.humidity) * (1 - Math.exp(-HUMID_RATE * min)));
   stepShed(min);
@@ -399,6 +431,7 @@ function render() {
   fogKick();
   checkDecor();
   $("decorNew").hidden = !state.decorGot.some((id) => !state.decorSeen.includes(id));
+  renderUpgrades();
 }
 
 // ---- 소리 ----
@@ -482,6 +515,10 @@ const SYNTH = {
   content: (c) => notes(c, [392, 330], 0.22, { vol: 0.06 }),
   // 허물 벗는 바스락 소리
   rustle: (c) => { for (let i = 0; i < 6; i++) crunch(c, i * 0.16, 0.05, 0.07); },
+  // 코인 "띠링"
+  coin: (c) => { tone(c, 0, 988, 0.08, { type: "square", vol: 0.06 }); tone(c, 0.08, 1319, 0.3, { type: "square", vol: 0.06 }); },
+  // 상점에서 샀을 때
+  buy: (c) => { notes(c, [784, 988, 1175, 1568], 0.07, { type: "square", vol: 0.05 }); },
 };
 
 // 칙 소리: 높은 음역만 남긴 짧은 잡음
@@ -650,15 +687,30 @@ function giveFood(kind) {
     tick();
     state.hunger = clamp(state.hunger + f.hunger);
     state.happy = clamp(state.happy + f.happy);
-    if (state.digest.length < MAX_DIGEST) {
-      state.digest.push(state.ageMin + DIGEST_MIN + Math.random() * DIGEST_RAND);
-      state.digest.sort((a, b) => a - b);
-    }
+    addDigest(1);
     busy = false;
     setAction("eat", 1500);
     sfx("eat");
     say(f.msg);
   }, 900);
+}
+
+// 먹은 게 있으면 잠시 뒤 응가가 나오게 예약한다
+function addDigest(ate) {
+  if (!ate || state.digest.length >= MAX_DIGEST) return;
+  state.digest.push(state.ageMin + DIGEST_MIN + Math.random() * DIGEST_RAND);
+  state.digest.sort((a, b) => a - b);
+}
+
+// 놀이 코인 받기. 받은 개수를 돌려준다
+function earnCoins(n) {
+  if (!(n > 0)) return 0;
+  state.coins += n;
+  setTimeout(() => sfx("coin"), 250);
+  const c = spawn("rise-fx coin-fx", `+${n} 🪙`, 50, 35);
+  setTimeout(() => c.remove(), 1800);
+  renderUpgrades();
+  return n;
 }
 
 const BUG_GAME_MS = 8000;
@@ -681,7 +733,7 @@ function startBugGame() {
       $("bubble").textContent = `${caught}마리 잡았다!`;
       setTimeout(() => bug.remove(), 300);
     });
-    setTimeout(() => { if (!bug.dataset.done) bug.remove(); }, 1300);
+    setTimeout(() => { if (!bug.dataset.done) bug.remove(); }, 1000); // 빨리 숨어 버린다 (원래 1.3초)
   }, 650);
   setTimeout(() => {
     clearInterval(spawner);
@@ -690,9 +742,11 @@ function startBugGame() {
     state.happy = clamp(state.happy + 10 + caught * 3);
     state.hunger = clamp(state.hunger + caught * 2);
     state.energy = clamp(state.energy - 10);
+    addDigest(caught);
+    const got = earnCoins(caught * COIN.bug);
     busy = false;
     sfx(caught ? "yay" : "tap");
-    say(caught ? `${caught}마리나 잡았어요! 신난다!` : "다음엔 꼭 잡아보자!");
+    say(caught ? `${caught}마리나 잡았어요! 🪙 +${got}` : "다음엔 꼭 잡아보자!");
   }, BUG_GAME_MS);
 }
 
@@ -709,7 +763,7 @@ function sparkle(n, x, y, spread) {
 // ---- 청소 ----
 // 실제 레오파드 게코는 목욕시키지 않는다. 대신 매일 응가를 집게로 치우고(스팟 청소) 물을 갈아준다.
 // 응가 자리(방 기준 %): 물그릇 옆 한쪽 구석
-const POOP_SLOTS = [[64, 91], [70, 93], [67, 85]];
+const POOP_SLOTS = [[64, 91], [70, 93], [67, 85], [59, 94], [61, 86]];
 let cleaning = false, cleanTimer;
 
 function renderPoops() {
@@ -951,14 +1005,9 @@ let quiz = null, mathSay = "";
 
 // 학년별 문제 유형 (초등 교육과정 기준). fam이 같은 유형끼리는 묶어서 비율을 맞춘다
 // (2학년 구구단이 8개 유형이어도 덧셈·뺄셈·곱셈이 비슷하게 나오게).
+// v0.11.0: 아이 요청으로 2학년은 한 자리 곱셈(구구단)만 나온다
 const MATH_TYPES = {
-  2: [
-    { id: "add", fam: "+", name: "받아올림 없는 덧셈" },
-    { id: "addc", fam: "+", name: "받아올림 있는 덧셈" },
-    { id: "sub", fam: "-", name: "받아내림 없는 뺄셈" },
-    { id: "subb", fam: "-", name: "받아내림 있는 뺄셈" },
-    ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
-  ],
+  2: [2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
   3: [
     { id: "add3", fam: "+", name: "세 자리 덧셈" },
     { id: "sub3", fam: "-", name: "세 자리 뺄셈" },
@@ -1002,26 +1051,6 @@ function mk(a, op, b, blank) {
 
 // 유형별 문제 생성기. 레벨 1: 쉬운 문제, 2: 원래 난이도, 3: 빈칸 문제나 더 큰 수
 const GEN = {
-  add(l) {
-    const [a, b] = l === 1 ? pick(() => [rand(10, 89), rand(1, 9)], (a, b) => !carries(a, b))
-      : pick(() => [rand(10, 89), rand(10, 89)], (a, b) => !carries(a, b));
-    return mk(a, "+", b, l === 3 && blankSide());
-  },
-  addc(l) {
-    const [a, b] = l === 1 ? pick(() => [rand(11, 89), rand(2, 9)], (a, b) => carries(a, b) === 1 && a + b < 100)
-      : pick(() => [rand(11, 89), rand(11, 89)], (a, b) => carries(a, b) >= 1);
-    return mk(a, "+", b, l === 3 && blankSide());
-  },
-  sub(l) {
-    const [a, b] = l === 1 ? pick(() => [rand(11, 99), rand(1, 9)], (a, b) => !borrows(a, b))
-      : pick(() => { const a = rand(21, 99); return [a, rand(10, a)]; }, (a, b) => !borrows(a, b));
-    return mk(a, "-", b, l === 3 && blankSide());
-  },
-  subb(l) {
-    const [a, b] = l === 1 ? pick(() => [rand(20, 99), rand(2, 9)], (a, b) => borrows(a, b) === 1)
-      : pick(() => { const a = rand(30, 99); return [a, rand(11, a - 1)]; }, (a, b) => borrows(a, b) >= 1);
-    return mk(a, "-", b, l === 3 && blankSide());
-  },
   add3(l) {
     const [a, b] = l === 1 ? pick(() => [rand(100, 899), rand(100, 899)], (a, b) => carries(a, b) === 1 && a + b < 1000)
       : pick(() => [rand(100, 999), rand(100, 999)], (a, b) => carries(a, b) >= 2);
@@ -1109,7 +1138,9 @@ function reviewDone(id, ok) {
   return false;
 }
 
-const dueReviews = () => state.mathWrong.filter((w) => w.due <= Date.now() && GEN[w.type]);
+// 지금 학년에 나오는 유형의 오답만 복습한다 (예전 2학년 덧셈·뺄셈 오답은 나오지 않는다)
+const gradeWrong = () => state.mathWrong.filter((w) => GEN[w.type] && (MATH_TYPES[state.mathGrade] || []).some((t) => t.id === w.type));
+const dueReviews = () => gradeWrong().filter((w) => w.due <= Date.now());
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) { const j = rand(0, i); [arr[i], arr[j]] = [arr[j], arr[i]]; }
@@ -1136,7 +1167,7 @@ function makeQuiz() {
 
 // 수학 미션 첫 화면: 오답 노트 개수 + 유형별 레벨
 function renderSkills() {
-  const due = dueReviews().length, total = state.mathWrong.length;
+  const due = dueReviews().length, total = gradeWrong().length;
   $("mathReview").textContent = !total ? "📒 오답 노트가 비어 있어요"
     : due ? `📒 오답 노트: 복습할 문제 ${due}개가 이번 미션에 나와요`
     : `📒 오답 노트: ${total}개 (내일 다시 확인해요)`;
@@ -1334,6 +1365,7 @@ function layEgg() {
     mathSkill: state.mathSkill, mathWrong: state.mathWrong, treats: state.treats, // 아이의 실력은 이어진다
     lampOn: state.lampOn, temp: state.temp, water: state.water, humidity: state.humidity,
     stats: state.stats, decor: state.decor, decorGot: state.decorGot, decorSeen: state.decorSeen, // 꾸민 사육장은 그대로
+    coins: state.coins, upgrades: state.upgrades, // 코인과 업그레이드한 사육장도 그대로
   };
   state = Object.assign(newState(), keep);
   save();
@@ -1806,8 +1838,8 @@ function mouthRoom() {
 
 // ---- 사냥 놀이: 집게로 밀웜을 천천히 움직이면 게코가 살금살금 다가가 꼬리를 떨다가 덥석! ----
 // 실제 레오파드 게코는 먹이를 발견하면 몸을 낮추고 꼬리 끝을 부르르 떨다가 덮친다.
-const HUNT_MS = 25000, HUNT_GOAL = 3;
-const HUNT_FAST = 70;   // 밀웜이 이보다 빠르면(방 너비 %/초) 깜짝 놀라 멈춘다
+const HUNT_MS = 20000, HUNT_GOAL = 3; // 원래 25초
+const HUNT_FAST = 60;  // 밀웜이 이보다 빠르면(방 너비 %/초) 깜짝 놀라 멈춘다
 const HUNT_FLOOR = 55;  // 이보다 아래(방 높이 %)로 내려와야 닿는다
 const HUNT_REACH = 8;   // 입과 밀웜 사이가 이 안이면 덮칠 수 있다
 let hunt = null;
@@ -1937,13 +1969,11 @@ function endHunt() {
   state.hunger = clamp(state.hunger + h.caught * 6);
   state.energy = clamp(state.energy - 8);
   if (h.caught >= HUNT_GOAL) bump("huntPerfect");
-  if (h.caught && state.digest.length < MAX_DIGEST) {
-    state.digest.push(state.ageMin + DIGEST_MIN + Math.random() * DIGEST_RAND);
-    state.digest.sort((a, b) => a - b);
-  }
+  addDigest(h.caught);
+  const got = earnCoins(h.caught * COIN.hunt + (h.caught >= HUNT_GOAL ? COIN.perfect : 0));
   busy = false;
   sfx(h.caught ? "yay" : "tap");
-  say(h.caught >= HUNT_GOAL ? "사냥 대성공! 살금살금… 덥석!" : h.caught ? `${h.caught}마리 잡았어요! 신나요` : "다음엔 천천히 움직여 봐요");
+  say(h.caught >= HUNT_GOAL ? `사냥 대성공! 덥석! 🪙 +${got}` : h.caught ? `${h.caught}마리 잡았어요! 🪙 +${got}` : "다음엔 천천히 움직여 봐요");
   wander();
 }
 
@@ -1968,7 +1998,7 @@ function startHide() {
     el.addEventListener("pointerdown", (e) => { e.stopPropagation(); pickSpot(el); });
     return el;
   });
-  hideGame = { spots, round: 0, found: 0, gecko: null, ready: false, swaps: 3, speed: 600 };
+  hideGame = { spots, round: 0, found: 0, gecko: null, ready: false, swaps: 4, speed: 500 }; // 원래 3번, 600ms
   $("room").classList.add("hiding");
   sfx("start");
   hideRound();
@@ -2041,7 +2071,7 @@ function pickSpot(el) {
     $("bubble").textContent = "찾았다! 🎉";
     sparkle(6, spotX(el), 70, 20);
     g.swaps += 2; // 맞히면 더 많이, 더 빨리 섞는다
-    g.speed = Math.max(260, g.speed - 120);
+    g.speed = Math.max(230, g.speed - 120);
   } else {
     sfx("nope");
     el.classList.add("wrong");
@@ -2066,9 +2096,11 @@ function endHide() {
   state.happy = clamp(state.happy + 8 + g.found * 5);
   state.energy = clamp(state.energy - 6);
   if (g.found === HIDE_ROUNDS) bump("hidePerfect");
+  const got = earnCoins(g.found * COIN.hide + (g.found === HIDE_ROUNDS ? COIN.perfect : 0));
   busy = false;
   sfx(g.found ? "yay" : "tap");
-  say(g.found === HIDE_ROUNDS ? "3번 모두 찾았어요! 눈이 정말 좋아요 👀" : `${HIDE_ROUNDS}번 중 ${g.found}번 찾았어요!`);
+  say((g.found === HIDE_ROUNDS ? "3번 모두 찾았어요! 눈이 정말 좋아요 👀" : `${HIDE_ROUNDS}번 중 ${g.found}번 찾았어요!`)
+    + (got ? ` 🪙 +${got}` : ""));
   wander();
 }
 
@@ -2093,10 +2125,46 @@ const DECOR = [
   { id: "moai", icon: "🗿", name: "석상", size: 16, how: "숨바꼭질 3번 모두 찾기", goal: () => [stat("hidePerfect"), 1] },
   { id: "castle", icon: "🏰", name: "성", size: 22, how: "어른 게코로 자라기", ok: () => stageNo() >= 3 },
   { id: "crown", icon: "👑", name: "왕관", size: 9, how: "2대 게코 키우기", ok: () => state.gen >= 2 },
+  // 상점에서 코인으로 사는 장식 (price). svg가 있으면 이모지 대신 그림을 쓴다
+  { id: "tuft", icon: "🌾", name: "풀숲", size: 13, price: 15 },
+  { id: "tree", icon: "🌳", name: "장식 나무", size: 24, price: 30 },
+  { id: "ruby", icon: "", svg: "ruby", name: "루비", size: 10, price: 45 },
+  { id: "dragon", icon: "", svg: "dragon", name: "아기 드래곤 모형", size: 17, price: 70 },
 ];
+// 장식 그림 (그라디언트는 쓰지 않는다: 같은 id가 여러 번 나오면 숨겨진 쪽을 가리켜 안 보일 수 있다)
+const DECOR_SVG = {
+  ruby: `<svg class="dsvg" viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M14 96c3-9 17-13 36-13s33 4 36 13z" fill="#7d6a58"/><path d="M24 92c6-4 16-5 26-5" stroke="#a8957f" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <polygon points="30,26 70,26 88,46 50,90 12,46" fill="#c8102e"/>
+    <polygon points="30,26 70,26 62,46 38,46" fill="#ff4d6d"/>
+    <polygon points="30,26 38,46 12,46" fill="#ff7a90"/>
+    <polygon points="70,26 88,46 62,46" fill="#d81b3c"/>
+    <polygon points="12,46 38,46 50,90" fill="#9e0b26"/>
+    <polygon points="38,46 62,46 50,90" fill="#e01e44"/>
+    <polygon points="62,46 88,46 50,90" fill="#b00d2e"/>
+    <path d="M36 30h10l-5 9z" fill="#fff" opacity=".85"/><circle cx="78" cy="18" r="3" fill="#fff"/><path d="M78 10v16M70 18h16" stroke="#fff" stroke-width="1.5"/>
+  </svg>`,
+  dragon: `<svg class="dsvg" viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M14 88h72v5c0 4-16 7-36 7s-36-3-36-7z" fill="#6d4c41"/><ellipse cx="50" cy="88" rx="36" ry="6" fill="#a1887f"/>
+    <path d="M66 80c14 1 22-7 20-17-1-5-7-6-8-1 2 6-4 11-13 11z" fill="#6cbf65"/><path d="M80 60l8-6-1 10z" fill="#ffd54f"/>
+    <path d="M31 58c-12-8-22-4-24 5 6-3 11-1 13 4 4-5 8-5 11-3z" fill="#4fa34a"/>
+    <path d="M69 58c12-8 22-4 24 5-6-3-11-1-13 4-4-5-8-5-11-3z" fill="#4fa34a"/>
+    <ellipse cx="50" cy="70" rx="21" ry="16" fill="#7cc576"/><ellipse cx="50" cy="74" rx="12" ry="10" fill="#fff3c4"/>
+    <ellipse cx="38" cy="84" rx="7" ry="4" fill="#6cbf65"/><ellipse cx="62" cy="84" rx="7" ry="4" fill="#6cbf65"/>
+    <ellipse cx="34" cy="70" rx="4" ry="6" fill="#6cbf65" transform="rotate(25 34 70)"/><ellipse cx="66" cy="70" rx="4" ry="6" fill="#6cbf65" transform="rotate(-25 66 70)"/>
+    <path d="M35 22l-5-14 12 9zM65 22l5-14-12 9z" fill="#ffd54f"/><path d="M45 17l5-7 5 7z" fill="#ffb300"/>
+    <circle cx="50" cy="38" r="22" fill="#7cc576"/>
+    <circle cx="41" cy="37" r="5.5" fill="#222"/><circle cx="59" cy="37" r="5.5" fill="#222"/>
+    <circle cx="43" cy="35" r="2" fill="#fff"/><circle cx="61" cy="35" r="2" fill="#fff"/>
+    <ellipse cx="33" cy="46" rx="4.5" ry="2.6" fill="#ff8fab" opacity=".8"/><ellipse cx="67" cy="46" rx="4.5" ry="2.6" fill="#ff8fab" opacity=".8"/>
+    <path d="M44 48q6 5 12 0" stroke="#2e5e2a" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  </svg>`,
+};
+const decorIcon = (d) => (d.svg ? DECOR_SVG[d.svg] : d.icon);
 const MAX_DECOR = 12, DECOR_SCALE = [0.6, 1.8];
 const decorDef = (id) => DECOR.find((d) => d.id === id);
 function decorReady(d) {
+  if (d.price) return false; // 상점 장식은 사야만 생긴다
   if (d.ok) return d.ok();
   if (d.goal) { const [now, need] = d.goal(); return now >= need; }
   return true;
@@ -2128,7 +2196,7 @@ function renderDecor() {
     if (!d) return;
     const el = document.createElement("div");
     el.className = "decor-item" + (decorating && i === selDecor ? " sel" : "");
-    el.textContent = d.icon;
+    el.innerHTML = decorIcon(d);
     el.dataset.i = i;
     el.style.left = item.x + "%";
     el.style.top = item.y + "%";
@@ -2177,9 +2245,9 @@ function renderTray() {
     const el = document.createElement("div");
     el.className = "tray-item" + (got ? "" : " locked");
     el.dataset.id = d.id;
-    let html = `<span class="ti-icon">${d.icon}</span><span class="ti-name">${got ? d.name : "🔒 " + d.name}</span>`;
+    let html = `<span class="ti-icon">${decorIcon(d)}</span><span class="ti-name">${got ? d.name : "🔒 " + d.name}</span>`;
     if (!got) {
-      html += `<span class="ti-how">${d.how}</span>`;
+      html += `<span class="ti-how">${d.price ? `🛒 상점에서 🪙 ${d.price}` : d.how}</span>`;
       if (d.goal) {
         const [now, need] = d.goal();
         html += `<span class="ti-bar"><i style="width:${Math.min(100, now / need * 100)}%"></i></span>`;
@@ -2230,7 +2298,7 @@ function startTrayDrag(e, d) {
   const src = e.currentTarget;
   const ghost = document.createElement("div");
   ghost.className = "decor-ghost";
-  ghost.textContent = d.icon;
+  ghost.innerHTML = decorIcon(d);
   ghost.style.fontSize = decorPx({ id: d.id }) + "px";
   document.body.appendChild(ghost);
   const move = (ev) => { ghost.style.left = ev.clientX + "px"; ghost.style.top = ev.clientY + "px"; };
@@ -2305,6 +2373,109 @@ $("decorLayer").addEventListener("pointerdown", (e) => {
 $("room").addEventListener("pointerdown", (e) => {
   if (decorating && !e.target.closest(".decor-item, #decorTools") && selDecor >= 0) { selDecor = -1; renderDecor(); }
 });
+
+// ================= 상점 =================
+// 놀아주기로 모은 코인으로 은신처·물그릇·바닥재를 업그레이드하고 장식을 산다.
+// 업그레이드 단계는 #room의 data-hide / data-dish / data-floor로 그림에 반영된다 (style.css)
+function renderUpgrades() {
+  const room = $("room");
+  for (const u of UPGRADES) {
+    const lv = String(upLv(u.id));
+    if (room.dataset[u.id] !== lv) room.dataset[u.id] = lv;
+  }
+  $("coinLabel").textContent = "🪙 " + state.coins;
+}
+
+let shopSay = "";
+function renderShop(msg) {
+  $("shopCoins").textContent = "🪙 " + state.coins;
+  renderUpgrades();
+  if (msg !== undefined) $("shopMsg").textContent = msg;
+  const ups = $("shopUps");
+  ups.innerHTML = "";
+  for (const u of UPGRADES) {
+    const lv = upLv(u.id), next = u.levels[lv];
+    const row = document.createElement("div");
+    row.className = "shop-up";
+    row.innerHTML = `<span class="si">${u.icon}</span><span class="st"><b></b><span class="shop-lv"></span><small></small></span>`;
+    row.querySelector("b").textContent = `${u.name}: ${u.levels[lv - 1].name}`;
+    row.querySelector(".shop-lv").textContent = "★".repeat(lv) + "☆".repeat(u.levels.length - lv);
+    row.querySelector("small").textContent = next ? `다음: ${next.name} — ${next.desc}` : "최고 단계예요! 👑";
+    const b = document.createElement("button");
+    b.className = "buy" + (!next ? " done" : state.coins < next.price ? " poor" : "");
+    b.textContent = next ? `🪙 ${next.price}` : "완성";
+    if (next) b.addEventListener("click", () => buyUpgrade(u));
+    else b.disabled = true;
+    row.appendChild(b);
+    ups.appendChild(row);
+  }
+  const decs = $("shopDecor");
+  decs.innerHTML = "";
+  for (const d of DECOR.filter((x) => x.price)) {
+    const owned = state.decorGot.includes(d.id);
+    const card = document.createElement("div");
+    card.className = "shop-dec";
+    card.innerHTML = `<span class="si">${decorIcon(d)}</span><b></b>`;
+    card.querySelector("b").textContent = d.name;
+    const b = document.createElement("button");
+    b.className = "buy" + (owned ? " done" : state.coins < d.price ? " poor" : "");
+    b.textContent = owned ? "✅ 샀어요" : `🪙 ${d.price}`;
+    if (owned) b.disabled = true;
+    else b.addEventListener("click", () => buyDecor(d));
+    card.appendChild(b);
+    decs.appendChild(card);
+  }
+}
+
+// 코인이 모자라면 몇 개 더 필요한지 알려 준다. 살 수 있으면 true
+function pay(price) {
+  if (state.coins >= price) { state.coins -= price; return true; }
+  sfx("nope");
+  renderShop(`코인이 ${price - state.coins}개 더 필요해요! ⚽ 놀아주기로 모아요`);
+  return false;
+}
+
+function buyUpgrade(u) {
+  const lv = upLv(u.id), next = u.levels[lv];
+  if (!next || !pay(next.price)) return;
+  tick(); // 지금까지는 예전 단계로 계산하고, 지금부터 새 단계
+  state.upgrades[u.id] = lv + 1;
+  save();
+  sfx("buy");
+  renderUpgrades();
+  shopSay = `${u.name}${josa(u.name, "이", "가")} ${next.name}${josa(next.name, "이", "가")} 됐어요! 고마워요 🦎`;
+  renderShop(`🎉 업그레이드 성공! ${u.icon} ${next.name}`);
+}
+
+function buyDecor(d) {
+  if (state.decorGot.includes(d.id) || !pay(d.price)) return;
+  state.decorGot.push(d.id); // decorSeen에는 넣지 않아서 꾸미기 버튼에 NEW가 뜬다
+  save();
+  sfx("buy");
+  shopSay = `${d.name}${josa(d.name, "을", "를")} 샀어요! 🎨 꾸미기에서 놓아 봐요`;
+  renderShop(`🎁 ${d.name}${josa(d.name, "을", "를")} 샀어요! 🎨 꾸미기에서 놓을 수 있어요`);
+}
+
+function openShop() {
+  if (busy) return;
+  tick();
+  busy = true;
+  shopSay = "";
+  renderShop("");
+  $("shopPanel").hidden = false;
+  render();
+  sfx("tap");
+}
+function closeShop() {
+  $("shopPanel").hidden = true;
+  busy = false;
+  render();
+  if (shopSay) { say(shopSay); shopSay = ""; }
+}
+$("shopBtn").addEventListener("click", openShop);
+$("shopClose").addEventListener("click", closeShop);
+$("shopDone").addEventListener("click", closeShop);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("shopPanel").hidden) closeShop(); });
 
 // ---- 탈피: 벽에 몸을 비벼 허물을 벗고, 벗은 허물을 먹는다 ----
 const SKIN_SVG = `<svg viewBox="0 0 80 30" aria-hidden="true">
