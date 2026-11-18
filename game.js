@@ -391,8 +391,9 @@ function render() {
   $("dark").hidden = !state.sleeping;
   renderBars();
   $("sleepBtn").textContent = state.sleeping ? "☀️ 깨우기" : "🌙 재우기";
-  $("mathLeft").textContent = `오늘 🦴 ${mathLeft()}/${MATH_DAILY}` + (state.treats ? ` · 🪱 ${state.treats}` : "")
-    + (dueReviews().length ? ` · 📒 복습 ${dueReviews().length}` : "");
+  // 버튼 옆 작은 글씨: 오늘 받은 영양제 · 누에 간식 · 복습할 문제 (0이면 안 보인다)
+  $("mathLeft").textContent = [mathToday() && `오늘 🦴 ${mathToday()}`, state.treats && `🪱 ${state.treats}`,
+    dueReviews().length && `📒 복습 ${dueReviews().length}`].filter(Boolean).join(" · ");
   if (document.activeElement !== $("nameInput")) $("nameInput").value = state.name;
   renderLight();
   fogKick();
@@ -932,8 +933,8 @@ document.querySelectorAll("[data-food]").forEach((b) =>
 // ---- 수학 미션 ----
 // 사칙연산 5문제 중 4개 이상 맞히면 칼슘 영양제를 받는다 (성장이 빨라지고 행복해진다).
 // 진짜 레오파드 게코도 먹이에 칼슘 가루를 묻혀 줘야 뼈가 튼튼하게 자란다.
-// 영양제는 하루 MATH_DAILY번까지만 주고, 그 뒤로는 연습만 할 수 있다.
-const MATH_COUNT = 5, MATH_PASS = 4, MATH_DAILY = 3;
+// 영양제는 횟수 제한 없이 통과할 때마다 준다. (mathClears: 오늘 받은 횟수, 보여 주기용)
+const MATH_COUNT = 5, MATH_PASS = 4;
 const MATH_GROW_MIN = 60, MATH_HAPPY = 15;
 // 자동 난이도: 유형마다 레벨 1~3. 처음엔 2(원래 난이도). 연속 LEVEL_UP_STREAK개 맞히면 올라가고,
 // 레벨이 바뀐 뒤 3문제 이상 풀었는데 최근 3문제 중 2개를 틀리면 내려간다.
@@ -945,7 +946,7 @@ const REVIEW_PER_QUIZ = 2, REVIEW_KEEP = 30, REVIEW_GAP_MS = 20 * 3600000;
 const MAX_TREATS = 9;
 const rand = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const today = () => new Date().toDateString();
-const mathLeft = () => Math.max(0, MATH_DAILY - (state.mathDay === today() ? state.mathClears : 0));
+const mathToday = () => (state.mathDay === today() ? state.mathClears : 0);
 let quiz = null, mathSay = "";
 
 // 학년별 문제 유형 (초등 교육과정 기준). fam이 같은 유형끼리는 묶어서 비율을 맞춘다
@@ -1182,9 +1183,8 @@ function showMathIntro() {
     b.setAttribute("aria-checked", on);
   });
   $("mathReward").textContent = `성장 ${MATH_GROW_MIN / 60}시간 빨라짐 · 행복 +${MATH_HAPPY}`;
-  const left = mathLeft();
-  $("mathToday").textContent = left ? `오늘 받을 수 있는 영양제: 🦴 ${left}개`
-    : "오늘 영양제는 다 받았어요! 그래도 레벨 업·오답 졸업·만점이면 🪱 누에 간식을 받아요";
+  const done = mathToday();
+  $("mathToday").textContent = "통과할 때마다 🦴 영양제를 받아요" + (done ? ` (오늘 ${done}번 받았어요)` : "");
   renderSkills();
   showMathView("mathIntro");
 }
@@ -1257,18 +1257,9 @@ function finishQuiz() {
   if (score < MATH_PASS) {
     msg = `아깝다! ${MATH_PASS}개 이상 맞히면 영양제를 받아요`;
     sfx("tap");
-  } else if (mathLeft()) {
+  } else {
     bump("mathPass");
     msg = giveCalcium();
-  } else {
-    // 하루 영양제는 다 받았어도 공부한 만큼 조금 기뻐한다
-    bump("mathPass");
-    tick();
-    state.happy = clamp(state.happy + 5);
-    save();
-    msg = "최고예요! 오늘 영양제는 다 받았지만 게코가 기뻐해요";
-    mathSay = "공부하는 모습 멋져요!";
-    sfx("yay");
   }
   // 누에 간식: 레벨 업, 오답 졸업, 만점마다 1개
   const earned = quiz.ups.length + quiz.grads + (score === MATH_COUNT ? 1 : 0);
