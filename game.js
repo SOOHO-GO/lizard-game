@@ -33,6 +33,16 @@ const STAGES = [
 const LAY_CARE_MIN = 3 * 24 * 60;
 const LAY_GOAL = { key: "lay", name: "알 낳기", care: STAGES[STAGES.length - 1].care + LAY_CARE_MIN };
 const IMG_DIR = "assets/lizard/";
+// 모프(색 변이): 알에서 아기 게코로 깨어날 때 랜덤으로 하나 정해진다.
+// 노멀은 assets/lizard/ 그림을, 나머지는 assets/lizard/<key>/ 폴더의 같은 이름 그림을 쓴다.
+const MORPHS = [
+  { key: "normal", name: "노멀" },
+  { key: "tangerine", name: "탠저린" },
+  { key: "macksnow", name: "맥 스노우" },
+  { key: "blizzard", name: "블리자드" },
+];
+const morphOf = (key) => MORPHS.find((m) => m.key === key) || MORPHS[0];
+const morphDir = (key) => IMG_DIR + (morphOf(key).key === "normal" ? "" : morphOf(key).key + "/");
 const CAGE_BG = "assets/cage/background.png";
 // 온도: 램프를 켜면 LAMP_MAX 쪽으로, 끄면 방 온도(ROOM_TEMP) 쪽으로 천천히 움직인다.
 // 램프를 계속 켜 두면 1시간쯤 뒤 너무 뜨거워지고, 꺼 두면 1시간쯤 뒤 추워진다.
@@ -65,7 +75,7 @@ function newState() {
            mathSkill: {}, mathWrong: [], treats: 0,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [],
-           gen: 1, history: [], born: now, last: now };
+           gen: 1, history: [], morph: null, born: now, last: now };
 }
 
 function fromSave(s) {
@@ -73,6 +83,8 @@ function fromSave(s) {
   if (typeof s.careMin !== "number") st.careMin = s.ageMin || 0; // 돌봄 조건 이전 저장본
   if (typeof s.poopCount !== "number") st.poopCount = s.poop ? 1 : 0; // 응가가 하나뿐이던 저장본
   delete st.poop;
+  // 모프가 없던 저장본: 이미 깨어난 게코는 원래 그림(노멀) 그대로, 알이면 깨어날 때 정한다
+  if (!MORPHS.some((m) => m.key === st.morph)) st.morph = st.careMin >= STAGES[1].care ? "normal" : null;
   if (st.mathGrade !== 2 && st.mathGrade !== 3) st.mathGrade = 2; // 1학년이 있던 저장본
   if (typeof s.born !== "number") st.born = st.last - st.ageMin * 60000; // 태어난 시각이 없던 저장본
   // 실력 기록·오답 노트가 없던 저장본
@@ -189,6 +201,7 @@ function tick() {
   const online = gap <= OFFLINE_GAP_MIN;
   state.last = now;
   if (min > 0) advance(min, !online);
+  pickMorph();
   if (state.careMin >= LAY_GOAL.care && !busy) return layEgg();
   // 꺼 둔 사이에 허물 벗을 준비가 끝났으면, 그 사이에 벗고 먹은 것으로 친다
   let shedAway = false;
@@ -196,13 +209,23 @@ function tick() {
   save();
   render();
   const after = stage();
-  if (after !== before) { sfx("grow"); say(`와! ${after.name}로 자랐어요!`); }
+  if (after !== before) { sfx("grow"); say(grewText(before, after)); }
   else if (shedAway) say("없는 동안 허물을 벗고 냠냠 먹었어요! ✨");
   // 켜 둔 동안 생긴 일만 소리를 낸다 (다시 열었을 때 한꺼번에 울리지 않게)
   else if (online && state.poopCount > hadPoop) sfx("poop");
   else if (online && wasSleeping && !state.sleeping) sfx("wake");
   maybeShed();
 }
+
+// 알에서 깨어났는데 모프가 아직 없으면 랜덤으로 정한다. 정해졌으면 true
+function pickMorph() {
+  if (state.morph || stage().key === "egg") return false;
+  state.morph = MORPHS[Math.floor(Math.random() * MORPHS.length)].key;
+  return true;
+}
+// 자랐을 때 말풍선. 알에서 깨어났으면 어떤 모프인지도 알려 준다.
+const grewText = (before, after) => before.key === "egg"
+  ? `와! ${morphOf(state.morph).name} ${after.name}가 태어났어요!` : `와! ${after.name}로 자랐어요!`;
 
 function stage() {
   let cur = STAGES[0];
@@ -267,13 +290,16 @@ function placeHead(st, face) {
 
 let shownKey = "";
 function renderPet(st, faces, svgFace) {
-  const key = st.key + "_" + faces.join("+");
+  const key = st.key + "_" + faces.join("+") + "_" + state.morph;
   if (key === shownKey) return; // 바뀐 게 없으면 다시 불러오지 않는다
   shownKey = key;
   const img = $("petImg"), svg = $("lizard"), fx = $("petFx");
   svg.innerHTML = lizardSvg(st, svgFace);
   placeHead(st, faces[faces.length - 1]);
-  const tries = faces.map((f) => IMG_DIR + st.key + "_" + f + ".png").concat(IMG_DIR + st.key + ".png");
+  // 모프 그림을 먼저 찾고, 없으면(동작 그림 등) 노멀 그림을 쓴다
+  const names = faces.map((f) => st.key + "_" + f).concat(st.key);
+  const dirs = [...new Set([st.key === "egg" ? IMG_DIR : morphDir(state.morph), IMG_DIR])];
+  const tries = dirs.flatMap((d) => names.map((n) => d + n + ".png"));
   (function next(i) {
     if (i >= tries.length) { img.style.display = "none"; svg.style.display = ""; fx.style.display = "none"; head = null; return; }
     const probe = new Image();
@@ -326,7 +352,8 @@ function lizardSvg(st, face) {
 function render() {
   const st = stage();
   const m = mood();
-  $("stageLabel").textContent = st.name + (state.gen > 1 ? ` · ${state.gen}대` : "");
+  $("stageLabel").textContent = st.name + (st.key !== "egg" && state.morph ? ` · ${morphOf(state.morph).name}` : "")
+    + (state.gen > 1 ? ` · ${state.gen}대` : "");
   $("s-grow").value = growth();
   const z = tempZone();
   const adult = !STAGES[STAGES.indexOf(st) + 1];
@@ -1260,10 +1287,11 @@ function giveCalcium() {
   state.mathClears++;
   state.careMin += MATH_GROW_MIN;
   state.happy = clamp(state.happy + MATH_HAPPY);
+  pickMorph();
   save();
   const grew = stage() !== before;
   sfx(grew ? "grow" : "yay");
-  mathSay = grew ? `와! ${stage().name}로 자랐어요!` : "칼슘 먹고 뼈가 튼튼해졌어요!";
+  mathSay = grew ? grewText(before, stage()) : "칼슘 먹고 뼈가 튼튼해졌어요!";
   return `미션 클리어! 🦴 칼슘 영양제를 받았어요\n성장 ${MATH_GROW_MIN / 60}시간 빨라짐 · 행복 +${MATH_HAPPY}`;
 }
 
@@ -1292,7 +1320,6 @@ document.addEventListener("keydown", (e) => {
 // ---- 알 낳기 / 가족 앨범 ----
 // 다 키운 어른은 이름·세대·함께한 기간을 앨범에 남기고, 다음 세대가 알부터 다시 시작한다.
 // 학년·수학 기록·램프·온도·물그릇은 사육장 그대로라 이어진다.
-const ALBUM_IMG = IMG_DIR + "adult_happy.png";
 let albumNews = false; // 방금 알을 낳아서 열린 앨범인지
 
 // "도마" → "도마 2세", "도마 2세" → "도마 3세" (이름 칸 최대 10글자에 맞춘다)
@@ -1302,7 +1329,7 @@ function babyName(name, gen) {
 }
 
 function layEgg() {
-  const parent = { name: state.name, gen: state.gen, born: state.born, laid: Date.now() };
+  const parent = { name: state.name, gen: state.gen, morph: state.morph || "normal", born: state.born, laid: Date.now() };
   const keep = {
     history: state.history.concat(parent), gen: state.gen + 1, name: babyName(state.name, state.gen + 1),
     mathGrade: state.mathGrade, mathDay: state.mathDay, mathClears: state.mathClears,
@@ -1335,7 +1362,7 @@ function renderAlbum() {
     const card = document.createElement("figure");
     card.className = "photo";
     const img = document.createElement("img");
-    img.src = ALBUM_IMG;
+    img.src = morphDir(h.morph) + "adult_happy.png";
     img.alt = h.name;
     // 그림 파일이 없으면 SVG 도마뱀으로 대신한다
     img.onerror = () => {
@@ -1346,7 +1373,7 @@ function renderAlbum() {
     };
     const days = Math.max(1, Math.round((h.laid - h.born) / 86400000));
     const cap = document.createElement("figcaption");
-    cap.innerHTML = `<b></b><span>${h.gen}대 · 함께한 시간 ${days}일</span><small>${fmtDate(h.born)} ~ ${fmtDate(h.laid)}</small>`;
+    cap.innerHTML = `<b></b><span>${h.gen}대 · ${morphOf(h.morph).name} · 함께한 시간 ${days}일</span><small>${fmtDate(h.born)} ~ ${fmtDate(h.laid)}</small>`;
     cap.querySelector("b").textContent = h.name; // 이름은 아이가 입력한 글자라 textContent로
     card.append(img, cap);
     list.appendChild(card);
