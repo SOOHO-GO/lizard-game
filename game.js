@@ -228,8 +228,11 @@ function pickMorph() {
   return true;
 }
 // 자랐을 때 말풍선. 알에서 깨어났으면 어떤 모프인지도 알려 준다.
+// 처음 만난 모프면 도감에 새로 올라갔다고 알려 준다.
 const grewText = (before, after) => before.key === "egg"
-  ? `와! ${morphOf(state.morph).name} ${after.name}가 태어났어요!` : `와! ${after.name}로 자랐어요!`;
+  ? `와! ${morphOf(state.morph).name} ${after.name}가 태어났어요!`
+    + (state.history.some((h) => morphOf(h.morph).key === state.morph) ? "" : " 📖 도감 등록!")
+  : `와! ${after.name}로 자랐어요!`;
 
 function stage() {
   let cur = STAGES[0];
@@ -1384,6 +1387,46 @@ function renderAlbum() {
   }
 }
 
+// ---- 도감: 지금까지 키운 게코(앨범 + 지금 게코)의 모프를 모아 본다 ----
+// 모프 key → 그 모프를 처음 만난 게코 이름
+function dexFound() {
+  const found = new Map();
+  const all = state.history.map((h) => ({ name: h.name, morph: morphOf(h.morph).key }));
+  if (state.morph) all.push({ name: state.name, morph: state.morph });
+  for (const g of all) if (!found.has(g.morph)) found.set(g.morph, g.name);
+  return found;
+}
+
+function renderDex() {
+  const found = dexFound(), list = $("dexList");
+  $("dexCount").textContent = `${found.size}/${MORPHS.length}`;
+  list.innerHTML = "";
+  MORPHS.forEach((m, i) => {
+    const known = found.has(m.key);
+    const card = document.createElement("figure");
+    card.className = "dex-card" + (known ? "" : " unknown");
+    const img = document.createElement("img");
+    img.src = morphDir(m.key) + "adult_happy.png";
+    img.alt = known ? m.name : "아직 못 만난 게코";
+    const cap = document.createElement("figcaption");
+    cap.innerHTML = `<span class="no">No.${i + 1}</span><b></b><small></small>`;
+    cap.querySelector("b").textContent = known ? m.name : "???";
+    // 이름은 아이가 입력한 글자라 textContent로
+    cap.querySelector("small").textContent = known ? `처음 만난 게코: ${found.get(m.key)}` : "알에서 만날 수 있어요";
+    card.append(img, cap);
+    list.appendChild(card);
+  });
+}
+
+function showAlbumTab(dex) {
+  $("photoView").hidden = dex;
+  $("dexView").hidden = !dex;
+  $("tabPhotos").setAttribute("aria-selected", String(!dex));
+  $("tabDex").setAttribute("aria-selected", String(dex));
+}
+$("tabPhotos").addEventListener("click", () => { sfx("tap"); showAlbumTab(false); });
+$("tabDex").addEventListener("click", () => { sfx("tap"); showAlbumTab(true); });
+
 function openAlbum(news) {
   if (busy) return;
   busy = true;
@@ -1392,6 +1435,8 @@ function openAlbum(news) {
   $("albumNews").hidden = !news;
   if (news) $("albumNews").textContent = `🥚 ${last.name}${josa(last.name, "이", "가")} 알을 낳고 앨범에 남았어요!\n새 아기 ${state.name}${josa(state.name, "을", "를")} 잘 키워 주세요`;
   renderAlbum();
+  renderDex();
+  showAlbumTab(false);
   $("albumPanel").hidden = false;
   render();
   if (!news) sfx("tap");

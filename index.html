@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.9.0">
+<link rel="stylesheet" href="style.css?v=0.10.0">
 </head>
 <body>
 <main id="app">
@@ -161,8 +161,18 @@
       <button id="albumClose" class="m-close" aria-label="닫기">✕</button>
       <h2 id="albumTitle">📸 가족 앨범</h2>
       <p id="albumNews" hidden></p>
-      <p id="albumEmpty">아직 사진이 없어요.<br>어른 게코가 알을 낳으면 여기에 사진이 남아요!</p>
-      <div id="albumList"></div>
+      <div id="albumTabs" role="tablist">
+        <button id="tabPhotos" role="tab" aria-selected="true">📷 사진</button>
+        <button id="tabDex" role="tab" aria-selected="false">📖 도감 <small id="dexCount"></small></button>
+      </div>
+      <div id="photoView">
+        <p id="albumEmpty">아직 사진이 없어요.<br>어른 게코가 알을 낳으면 여기에 사진이 남아요!</p>
+        <div id="albumList"></div>
+      </div>
+      <div id="dexView" hidden>
+        <p id="dexHint">알에서 어떤 게코가 나올지 몰라요! 만난 게코는 도감에 기록돼요.</p>
+        <div id="dexList"></div>
+      </div>
       <button id="albumDone" class="m-big">확인</button>
     </div>
   </div>
@@ -227,9 +237,9 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.9.0</small></footer>
+  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.10.0</small></footer>
 </main>
-<script src="game.js?v=0.9.0"></script>
+<script src="game.js?v=0.10.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
