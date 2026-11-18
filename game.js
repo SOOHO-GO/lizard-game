@@ -40,6 +40,10 @@ const MORPHS = [
   { key: "tangerine", name: "탠저린" },
   { key: "macksnow", name: "맥 스노우" },
   { key: "blizzard", name: "블리자드" },
+  { key: "lavender", name: "라벤더" },
+  { key: "albino", name: "알비노" },
+  { key: "blacknight", name: "블랙나이트" },
+  { key: "sunglow", name: "썬글로우" },
 ];
 const morphOf = (key) => MORPHS.find((m) => m.key === key) || MORPHS[0];
 const morphDir = (key) => IMG_DIR + (morphOf(key).key === "normal" ? "" : morphOf(key).key + "/");
