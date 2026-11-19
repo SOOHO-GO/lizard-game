@@ -46,6 +46,14 @@ const MORPHS = [
   { key: "albino", name: "알비노" },
   { key: "blacknight", name: "블랙나이트" },
   { key: "sunglow", name: "썬글로우" },
+  { key: "blood", name: "블러드" },
+  { key: "emerine", name: "에메린" },
+  { key: "rainwater", name: "레인워터" },
+  { key: "ghost", name: "고스트" },
+  { key: "murphy", name: "머피 패턴리스" },
+  { key: "superhypo", name: "하이포" },
+  { key: "galaxy", name: "갤럭시" },
+  { key: "cocoa", name: "코코아" },
 ];
 const morphOf = (key) => MORPHS.find((m) => m.key === key) || MORPHS[0];
 const morphDir = (key) => IMG_DIR + (morphOf(key).key === "normal" ? "" : morphOf(key).key + "/");
@@ -53,6 +61,8 @@ const CAGE_BG = "assets/cage/background.png";
 // 온도: 램프를 켜면 LAMP_MAX 쪽으로, 끄면 방 온도(ROOM_TEMP) 쪽으로 천천히 움직인다.
 // 램프를 계속 켜 두면 1시간쯤 뒤 너무 뜨거워지고, 꺼 두면 1시간쯤 뒤 추워진다.
 const LAMP_MAX = 36, ROOM_TEMP = 22, TEMP_RATE = 0.03;
+// 선풍기를 켜 두면 이 온도 쪽으로 식는다 (램프와 같은 TEMP_RATE: 켜 두면 1시간 안쪽에 추워진다)
+const FAN_MIN = 20;
 // 게임을 꺼 둔 동안은 온도조절기가 알맞은 온도로 맞춰 준다고 친다 (밤새 너무 덥거나 춥지 않게)
 const AUTO_TEMP = { day: 30, night: 25 };
 // 실제 레오파드 게코 사육 온도: 낮 28~32°C, 밤 24~27°C
@@ -102,7 +112,7 @@ function newState() {
   const now = Date.now();
   return { name: "도마", hunger: 80, happy: 80, energy: 80, clean: 80,
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
-           temp: 29, lampOn: true, mathGrade: 2, mathDay: "", mathClears: 0,
+           temp: 29, lampOn: true, fanOn: false, mathGrade: 2, mathDay: "", mathClears: 0,
            mathSkill: {}, mathWrong: [], treats: 0,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
@@ -199,7 +209,7 @@ function step(min, f) {
   for (const k of ["hunger", "happy", "energy", "clean"]) {
     state[k] = clamp(state[k] - (r[k] > 0 ? r[k] * f * e[k] * up[k] : r[k] * e.rest * upFx("hide", "rest")) * min);
   }
-  const target = f < 1 ? AUTO_TEMP[state.sleeping ? "night" : "day"] : state.lampOn ? LAMP_MAX : ROOM_TEMP;
+  const target = f < 1 ? AUTO_TEMP[state.sleeping ? "night" : "day"] : state.lampOn ? LAMP_MAX : state.fanOn ? FAN_MIN : ROOM_TEMP;
   state.temp += (target - state.temp) * (1 - Math.exp(-TEMP_RATE * min));
   state.ageMin += min;
   if (state.sleeping && state.energy >= 100) state.sleeping = false;
@@ -933,32 +943,29 @@ function renderTemp() {
   $("thermo").dataset.zone = z;
   $("room").classList.toggle("lamp-off", !state.lampOn);
   $("lampBtn").textContent = state.lampOn ? "🔥 히팅램프 끄기" : "💡 히팅램프 켜기";
+  $("fanBtn").textContent = state.fanOn ? "🌬️ 선풍기 끄기" : "🌬️ 선풍기 켜기";
 }
 
 function toggleLamp() {
   tick();
   state.lampOn = !state.lampOn;
+  if (state.lampOn) state.fanOn = false; // 램프와 선풍기는 하나만 켠다
   sfx("lamp");
   say(state.lampOn ? "램프 켜짐! 점점 따뜻해져요" : "램프 꺼짐! 점점 시원해져요");
   render();
 }
-// 선풍기: 누를 때마다 바로 FAN_DOWN도 내려간다 (램프를 끄는 것보다 빠르게 식힌다).
-// 너무 많이 누르면 추워질 수 있다. 램프가 켜져 있으면 다시 천천히 따뜻해진다.
-const FAN_DOWN = 2, FAN_MIN = 18;
-function useFan() {
+// 선풍기: 켜 두면 램프가 데우는 것과 같은 빠르기(TEMP_RATE)로 FAN_MIN 쪽으로 슬슬 식는다.
+// 계속 켜 두면 추워진다 (램프를 계속 켜 두면 더워지는 것처럼). 램프와 선풍기는 하나만 켠다.
+function toggleFan() {
   tick();
-  if (state.temp <= FAN_MIN) { nope("이미 너무 시원해요!"); return; }
-  state.temp = Math.max(FAN_MIN, state.temp - FAN_DOWN);
-  sfx("tap");
-  save();
+  state.fanOn = !state.fanOn;
+  if (state.fanOn) state.lampOn = false;
+  sfx("lamp");
+  say(state.fanOn ? "선풍기 켜짐! 점점 시원해져요 🌬️" : "선풍기 꺼짐!");
   render();
-  const z = tempZone();
-  say(z === "cold" ? `${Math.round(state.temp)}°C! 앗, 너무 추워요 🥶`
-    : z === "hot" ? `${Math.round(state.temp)}°C! 아직 더워요. 램프도 꺼 주세요`
-    : `${Math.round(state.temp)}°C! 시원해요 🌬️`);
 }
 $("lampBtn").addEventListener("click", toggleLamp);
-$("fanBtn").addEventListener("click", useFan);
+$("fanBtn").addEventListener("click", toggleFan);
 $("dish").addEventListener("click", changeWater);
 $("lamp").addEventListener("click", toggleLamp);
 
@@ -1379,7 +1386,7 @@ function layEgg() {
     history: state.history.concat(parent), gen: state.gen + 1, name: babyName(state.name, state.gen + 1),
     mathGrade: state.mathGrade, mathDay: state.mathDay, mathClears: state.mathClears,
     mathSkill: state.mathSkill, mathWrong: state.mathWrong, treats: state.treats, // 아이의 실력은 이어진다
-    lampOn: state.lampOn, temp: state.temp, water: state.water, humidity: state.humidity,
+    lampOn: state.lampOn, fanOn: state.fanOn, temp: state.temp, water: state.water, humidity: state.humidity,
     stats: state.stats, decor: state.decor, decorGot: state.decorGot, decorSeen: state.decorSeen, // 꾸민 사육장은 그대로
     coins: state.coins, upgrades: state.upgrades, // 코인과 업그레이드한 사육장도 그대로
   };
