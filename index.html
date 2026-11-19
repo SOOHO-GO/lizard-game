@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.11.0">
+<link rel="stylesheet" href="style.css?v=0.12.0">
 </head>
 <body>
 <main id="app">
@@ -193,6 +193,17 @@
         <div id="dexList"></div>
       </div>
       <button id="albumDone" class="m-big">확인</button>
+      <button id="resetBtn" class="link">처음부터 다시 시작하기</button>
+    </div>
+  </div>
+
+  <!-- 처음부터 다시: 실수로 누르지 않게 한 번 더 묻는다 -->
+  <div id="resetPanel" class="m-panel" hidden>
+    <div class="m-card" role="alertdialog" aria-modal="true" aria-labelledby="resetTitle" aria-describedby="resetDesc">
+      <h2 id="resetTitle">⚠️ 정말 처음부터 다시 할까요?</h2>
+      <p id="resetDesc">지금 키우는 게코, <b>가족 앨범 사진</b>, <b>도감</b>,<br>코인과 장식이 <b>모두 사라지고</b> 되돌릴 수 없어요.</p>
+      <button id="resetNo" class="m-big">아니요, 계속 키울래요</button>
+      <button id="resetYes" class="m-danger">네, 모두 지우고 처음부터</button>
     </div>
   </div>
 
@@ -271,9 +282,9 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><button id="resetBtn" class="link">처음부터 다시</button> <small style="opacity:.5">v0.11.0</small></footer>
+  <footer><small style="opacity:.5">v0.12.0</small></footer>
 </main>
-<script src="game.js?v=0.11.0"></script>
+<script src="game.js?v=0.12.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -336,6 +336,16 @@ progress::-moz-progress-bar { border-radius: 999px;
 #albumBtn:active { transform: translateY(2px); box-shadow: inset 0 1px 0 #fff, 0 1px 0 #f48fb1; }
 #albumPanel .m-card { background: linear-gradient(#fff, #fdf1f5); box-shadow: inset 0 2px 0 #fff, 0 6px 0 #f3c6d6, 0 18px 32px #0006; }
 #albumPanel h2 { color: #c2185b; }
+#resetBtn { display: block; margin: 10px auto 0; font-size: .85rem; color: #a08890; }
+/* 처음부터 다시 확인 창: 앨범 위에 뜬다 */
+#resetPanel { z-index: 60; }
+#resetPanel .m-card { background: linear-gradient(#fff, #fff3f0); box-shadow: inset 0 2px 0 #fff, 0 6px 0 #f5c6bd, 0 18px 32px #0006; }
+#resetPanel h2 { color: #c62828; }
+#resetPanel .m-big { background: linear-gradient(#7cc96f, #43a047); box-shadow: inset 0 2px 0 #fff5, 0 5px 0 #2e7d32, 0 8px 12px #2e7d3240; }
+#resetPanel .m-big:active { box-shadow: inset 0 2px 0 #fff5, 0 1px 0 #2e7d32; }
+.m-danger { display: block; width: 100%; margin: 10px 0 0; padding: 10px; border: 2px solid #e57373; border-radius: 14px; background: #fff;
+  color: #c62828; font: inherit; font-size: .95rem; font-weight: bold; cursor: pointer; }
+.m-danger:active { transform: translateY(2px); background: #ffebee; }
 #albumNews { white-space: pre-line; font-weight: bold; padding: 8px 10px; border-radius: 14px; background: #fff8e1; color: #8a5a00; }
 #albumEmpty { color: #8a6a76; }
 #albumTabs { display: flex; gap: 8px; justify-content: center; margin: 10px 0 4px; }

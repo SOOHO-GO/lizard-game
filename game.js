@@ -1480,14 +1480,36 @@ function closeAlbum() {
 $("albumBtn").addEventListener("click", () => openAlbum(false));
 $("albumClose").addEventListener("click", closeAlbum);
 $("albumDone").addEventListener("click", closeAlbum);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("albumPanel").hidden) closeAlbum(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("resetPanel").hidden) closeReset();
+  else if (!$("albumPanel").hidden) closeAlbum();
+});
 
 $("nameInput").addEventListener("input", (e) => {
   state.name = e.target.value.trim() || "도마";
   save();
 });
+// 처음부터 다시: 가족 앨범 안에만 버튼이 있고, 확인 창에서 한 번 더 묻는다.
+// 실수로 누르지 않게 큰 버튼은 "아니요" 쪽이다.
+function closeReset() {
+  $("resetPanel").hidden = true;
+  $("resetBtn").focus();
+}
 $("resetBtn").addEventListener("click", () => {
-  if (confirm("정말 처음부터 다시 시작할까요?")) { state = newState(); save(); render(); }
+  sfx("tap");
+  $("resetPanel").hidden = false;
+  $("resetNo").focus();
+});
+$("resetNo").addEventListener("click", () => { sfx("tap"); closeReset(); });
+$("resetPanel").addEventListener("click", (e) => { if (e.target === $("resetPanel")) closeReset(); });
+$("resetYes").addEventListener("click", () => {
+  state = newState();
+  save();
+  $("resetPanel").hidden = true;
+  albumNews = false;
+  closeAlbum();
+  say("새 알이 도착했어요! 이름을 지어 주세요.");
 });
 
 // 아이가 읽기 쉽게 큰 단위 두 개까지만: "1일 3시간", "2시간 10분", "5분", "곧!"
