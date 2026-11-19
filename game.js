@@ -1490,6 +1490,78 @@ $("nameInput").addEventListener("input", (e) => {
   state.name = e.target.value.trim() || "도마";
   save();
 });
+// ---- 황금 열쇠 (어른용): 아기·어린·어른 단계로 바로 건너뛴다 ----
+// 고른 뒤 3자리 × 3자리 곱셈을 맞혀야 열린다 (아이들이 마음대로 못 쓰게)
+let keyTarget = null, keyAnswer = 0;
+const rand3 = () => 100 + Math.floor(Math.random() * 900);
+
+function openKey() {
+  if (busy) return;
+  busy = true;
+  sfx("tap");
+  showKeyPick();
+  $("keyPanel").hidden = false;
+}
+function closeKey() {
+  $("keyPanel").hidden = true;
+  busy = false;
+  render();
+}
+function showKeyPick() {
+  const now = stageNo();
+  const box = $("keyStages");
+  box.innerHTML = "";
+  STAGES.slice(1).forEach((s) => {
+    const i = STAGES.indexOf(s);
+    const b = document.createElement("button");
+    b.disabled = i <= now; // 지금 단계나 이미 지난 단계로는 못 간다
+    b.innerHTML = `${s.name}<small>${i === now ? "지금 단계예요" : i < now ? "이미 지났어요" : "여기까지 건너뛰기"}</small>`;
+    b.addEventListener("click", () => { sfx("tap"); showKeyLock(s); });
+    box.appendChild(b);
+  });
+  $("keyPick").hidden = false;
+  $("keyLock").hidden = true;
+}
+function newKeyQuestion() {
+  const a = rand3(), b = rand3();
+  keyAnswer = a * b;
+  $("keyQ").textContent = `${a} × ${b} = ?`;
+  $("keyAns").value = "";
+}
+function showKeyLock(s) {
+  keyTarget = s;
+  $("keyGoal").innerHTML = `<b>${s.name}</b>로 건너뛸까요?`;
+  $("keyMsg").textContent = "";
+  newKeyQuestion();
+  $("keyPick").hidden = true;
+  $("keyLock").hidden = false;
+  $("keyAns").focus();
+}
+function tryKey() {
+  const v = Number($("keyAns").value.replace(/[^0-9]/g, ""));
+  if (v !== keyAnswer) {
+    sfx("tap");
+    $("keyMsg").textContent = "틀렸어요. 새 문제로 다시 해 보세요";
+    newKeyQuestion();
+    $("keyAns").focus();
+    return;
+  }
+  tick();
+  const before = stage();
+  if (state.careMin < keyTarget.care) state.careMin = keyTarget.care;
+  pickMorph();
+  save();
+  closeKey();
+  const after = stage();
+  if (after !== before) { sfx("grow"); say(grewText(before, after)); }
+}
+$("keyBtn").addEventListener("click", openKey);
+$("keyClose").addEventListener("click", closeKey);
+$("keyBack").addEventListener("click", () => { sfx("tap"); showKeyPick(); });
+$("keyOk").addEventListener("click", tryKey);
+$("keyAns").addEventListener("keydown", (e) => { if (e.key === "Enter") tryKey(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("keyPanel").hidden) closeKey(); });
+
 // 처음부터 다시: 가족 앨범 안에만 버튼이 있고, 확인 창에서 한 번 더 묻는다.
 // 실수로 누르지 않게 큰 버튼은 "아니요" 쪽이다.
 function closeReset() {
@@ -2133,7 +2205,7 @@ const stat = (k) => state.stats[k] || 0;
 const stageNo = () => STAGES.indexOf(stage());
 const DECOR = [
   { id: "rock", icon: "🪨", name: "돌", size: 13, how: "처음부터 있어요" },
-  { id: "grass", icon: "🌿", name: "풀", size: 12, how: "처음부터 있어요" },
+  { id: "grass", icon: "", svg: "grass", name: "뾰족 풀", size: 12, how: "처음부터 있어요" },
   { id: "log", icon: "🪵", name: "통나무", size: 18, how: "알에서 태어나면", ok: () => stageNo() >= 1 },
   { id: "shell", icon: "🐚", name: "조개껍데기", size: 9, how: "수학 미션 통과 1번", goal: () => [stat("mathPass"), 1] },
   { id: "mushroom", icon: "🍄", name: "버섯", size: 10, how: "응가 치우기 10번", goal: () => [stat("poop"), 10] },
@@ -2155,6 +2227,23 @@ const DECOR = [
 ];
 // 장식 그림 (그라디언트는 쓰지 않는다: 같은 id가 여러 번 나오면 숨겨진 쪽을 가리켜 안 보일 수 있다)
 const DECOR_SVG = {
+  // 뾰족뾰족한 풀 덤불: 바깥쪽은 진한 잎, 안쪽은 밝은 잎을 겹친다
+  grass: `<svg class="dsvg" viewBox="0 0 100 100" aria-hidden="true">
+    <ellipse cx="50" cy="92" rx="38" ry="6" fill="#7d6a58"/>
+    <polygon points="14,92 6,40 26,90" fill="#2e7d32"/>
+    <polygon points="22,92 24,18 36,90" fill="#388e3c"/>
+    <polygon points="34,92 44,6 50,90" fill="#2e7d32"/>
+    <polygon points="50,92 60,10 64,90" fill="#388e3c"/>
+    <polygon points="62,92 80,22 76,90" fill="#2e7d32"/>
+    <polygon points="72,92 96,44 86,90" fill="#388e3c"/>
+    <polygon points="20,92 14,52 32,90" fill="#4caf50"/>
+    <polygon points="30,92 34,32 44,90" fill="#66bb6a"/>
+    <polygon points="42,92 54,24 56,90" fill="#4caf50"/>
+    <polygon points="54,92 70,36 68,90" fill="#66bb6a"/>
+    <polygon points="64,92 86,56 78,90" fill="#4caf50"/>
+    <polygon points="38,92 28,58 48,90" fill="#81c784"/>
+    <polygon points="52,92 46,48 62,90" fill="#8bc34a"/>
+  </svg>`,
   ruby: `<svg class="dsvg" viewBox="0 0 100 100" aria-hidden="true">
     <path d="M14 96c3-9 17-13 36-13s33 4 36 13z" fill="#7d6a58"/><path d="M24 92c6-4 16-5 26-5" stroke="#a8957f" stroke-width="3" stroke-linecap="round" fill="none"/>
     <polygon points="30,26 70,26 88,46 50,90 12,46" fill="#c8102e"/>

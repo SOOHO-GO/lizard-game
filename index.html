@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.12.0">
+<link rel="stylesheet" href="style.css?v=0.13.0">
 </head>
 <body>
 <main id="app">
@@ -282,9 +282,30 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <footer><small style="opacity:.5">v0.12.0</small></footer>
+  <!-- 어른용 황금 열쇠: 성장 단계 건너뛰기 (3자리 곱셈을 맞혀야 열린다) -->
+  <div id="keyPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="keyTitle">
+      <button id="keyClose" class="m-close" aria-label="닫기">✕</button>
+      <h2 id="keyTitle">🔑 황금 열쇠</h2>
+      <div id="keyPick">
+        <p>어느 단계로 건너뛸까요?</p>
+        <div id="keyStages"></div>
+      </div>
+      <div id="keyLock" hidden>
+        <p id="keyGoal"></p>
+        <p class="key-hint">어른 확인 문제를 맞혀야 열려요</p>
+        <div id="keyQ"></div>
+        <input id="keyAns" type="text" inputmode="numeric" autocomplete="off" aria-label="정답">
+        <p id="keyMsg"></p>
+        <button id="keyOk" class="m-big">열기</button>
+        <button id="keyBack" class="link">다른 단계 고르기</button>
+      </div>
+    </div>
+  </div>
+
+  <footer><button id="keyBtn" aria-label="황금 열쇠"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M11.5 12H22M18 12v4M21 12v3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small style="opacity:.5">v0.13.0</small></footer>
 </main>
-<script src="game.js?v=0.12.0"></script>
+<script src="game.js?v=0.13.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
