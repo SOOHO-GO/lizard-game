@@ -942,7 +942,23 @@ function toggleLamp() {
   say(state.lampOn ? "램프 켜짐! 점점 따뜻해져요" : "램프 꺼짐! 점점 시원해져요");
   render();
 }
+// 선풍기: 누를 때마다 바로 FAN_DOWN도 내려간다 (램프를 끄는 것보다 빠르게 식힌다).
+// 너무 많이 누르면 추워질 수 있다. 램프가 켜져 있으면 다시 천천히 따뜻해진다.
+const FAN_DOWN = 2, FAN_MIN = 18;
+function useFan() {
+  tick();
+  if (state.temp <= FAN_MIN) { nope("이미 너무 시원해요!"); return; }
+  state.temp = Math.max(FAN_MIN, state.temp - FAN_DOWN);
+  sfx("tap");
+  save();
+  render();
+  const z = tempZone();
+  say(z === "cold" ? `${Math.round(state.temp)}°C! 앗, 너무 추워요 🥶`
+    : z === "hot" ? `${Math.round(state.temp)}°C! 아직 더워요. 램프도 꺼 주세요`
+    : `${Math.round(state.temp)}°C! 시원해요 🌬️`);
+}
 $("lampBtn").addEventListener("click", toggleLamp);
+$("fanBtn").addEventListener("click", useFan);
 $("dish").addEventListener("click", changeWater);
 $("lamp").addEventListener("click", toggleLamp);
 
