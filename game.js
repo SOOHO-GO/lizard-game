@@ -112,6 +112,7 @@ function newState() {
   const now = Date.now();
   return { name: "도마", hunger: 80, happy: 80, energy: 80, clean: 80,
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
+           careQuiz: true, mathLog: {},
            temp: 29, lampOn: true, fanOn: false, mathGrade: 2, mathDay: "", mathClears: 0,
            mathSkill: {}, mathWrong: [], treats: 0,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
@@ -966,7 +967,7 @@ function toggleFan() {
 }
 $("lampBtn").addEventListener("click", toggleLamp);
 $("fanBtn").addEventListener("click", toggleFan);
-$("dish").addEventListener("click", changeWater);
+$("dish").addEventListener("click", () => { if (!busy) withCareQuiz("water", changeWater); });
 $("lamp").addEventListener("click", toggleLamp);
 
 document.querySelectorAll("[data-act]").forEach((b) =>
@@ -974,8 +975,19 @@ document.querySelectorAll("[data-act]").forEach((b) =>
     if (busy) return;
     tick();
     if (stage().key === "egg") return nope("아직 알이에요! 조금만 기다려줘요");
-    ACTIONS[b.dataset.act]();
+    const act = b.dataset.act;
+    // 어차피 못 하는 상황이면 문제부터 내지 않고 바로 이유를 알려 준다
+    const why = CARE_BLOCK[act] && CARE_BLOCK[act]();
+    if (why) return nope(why);
+    if (CARE_QUIZ_TITLE[act]) withCareQuiz(act, () => ACTIONS[act]());
+    else ACTIONS[act]();
   }));
+// 돌봄 행동을 못 하는 이유 (없으면 빈 값). ACTIONS 안의 검사와 같다
+const CARE_BLOCK = {
+  feed: () => (state.sleeping ? "쿨쿨 자는 중이에요" : state.hunger > 95 ? "배불러요!"
+    : tempZone() === "cold" ? "추워서 소화가 안 돼요. 램프를 켜주세요" : ""),
+  play: () => (state.sleeping ? "쿨쿨 자는 중이에요" : state.energy < 15 ? "너무 졸려서 못 놀아요" : ""),
+};
 
 // 게코를 톡 건드리면 "끽끽" 하고 반응한다. 머리를 길게 누르면 쓰다듬기 (아래 쓰다듬기 부분)
 const PET_TALK = ["끽끽!", "간지러워요!", "안녕! 반가워요", "또 만져줘요!"];
@@ -1030,7 +1042,7 @@ let quiz = null, mathSay = "";
 // (2학년 구구단이 8개 유형이어도 덧셈·뺄셈·곱셈이 비슷하게 나오게).
 // v0.11.0: 아이 요청으로 2학년은 한 자리 곱셈(구구단)만 나온다
 const MATH_TYPES = {
-  2: [2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
+  2: [2, 3, 4, 5, 6].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
   3: [
     { id: "add3", fam: "+", name: "세 자리 덧셈" },
     { id: "sub3", fam: "-", name: "세 자리 뺄셈" },
@@ -1278,6 +1290,7 @@ function checkAnswer() {
   cur.locked = true;
   // 실력 기록 → 오답 노트 → 레벨 업 순서로 반영한다
   const lv = recordSkill(q, ok);
+  logAnswer(ok, "mission");
   const grad = q.reviewId ? reviewDone(q.reviewId, ok) : false;
   if (!ok && !q.reviewId) addWrong(q);
   if (grad) { cur.grads++; bump("grads"); }
@@ -1367,6 +1380,117 @@ document.addEventListener("keydown", (e) => {
   else if (/^[0-9]$/.test(e.key)) mathKey(e.key);
   else if (e.key === "Backspace") mathKey("del");
   else if (e.key === "Enter" && quiz) { e.preventDefault(); mathKey("ok"); }
+});
+
+// ---- 학습 기록 (부모용, 황금 열쇠 안에서 본다): 날짜별 푼 문제 수 / 맞힌 수 / 돌봄·미션 ----
+const LOG_DAYS = 60;
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function logAnswer(ok, src) {
+  const k = dayKey(), r = state.mathLog[k] || (state.mathLog[k] = { n: 0, ok: 0, care: 0, mission: 0 });
+  r.n++;
+  if (ok) r.ok++;
+  r[src] = (r[src] || 0) + 1;
+  const keys = Object.keys(state.mathLog).sort();
+  while (keys.length > LOG_DAYS) delete state.mathLog[keys.shift()];
+}
+
+// ---- 돌봄 문제: 밥주기·놀아주기·청소·물 갈기·분무 전에 수학 한 문제 ----
+// 수학 미션과 같은 학년·같은 자동 난이도로 내고, 실력·오답 노트에도 똑같이 기록한다.
+// 맞히면 바로 그 돌봄을 하고, 틀리면 정답을 보여 준 뒤 같은 유형의 새 문제가 나온다.
+const CARE_QUIZ_TITLE = { feed: "🍎 밥 주기 전에 한 문제!", play: "⚽ 놀기 전에 한 문제!", clean: "🧹 청소하기 전에 한 문제!",
+  water: "💧 물 갈기 전에 한 문제!", mist: "💦 분무하기 전에 한 문제!" };
+let cq = null; // { act, run, q, input, locked }
+
+function careQuizQuestion(prev) {
+  // 복습할 오답이 있으면 먼저 (돌봄 문제로도 오답 노트를 졸업할 수 있다)
+  const due = !prev && dueReviews().sort((a, b) => a.due - b.due)[0];
+  if (due) {
+    const p = due.fix === 0 ? { text: due.text, answer: due.answer } : GEN[due.type](due.lvl);
+    return Object.assign(p, { type: due.type, lvl: due.lvl, reviewId: due.id });
+  }
+  const t = prev ? { id: prev.type } : pickType(state.mathGrade, {});
+  const lvl = skill(t.id).lvl;
+  let p;
+  for (let i = 0; i < 20; i++) { p = GEN[t.id](lvl); if (!prev || p.text !== prev.text) break; }
+  return Object.assign(p, { type: t.id, lvl });
+}
+
+function withCareQuiz(act, run) {
+  if (!state.careQuiz) return run();
+  busy = true;
+  stopWalk();
+  render();
+  cq = { act, run, q: careQuizQuestion(), input: "", locked: false };
+  $("cqTitle").textContent = CARE_QUIZ_TITLE[act] || "한 문제!";
+  $("cqFeedback").textContent = "";
+  $("cqFeedback").className = "";
+  renderCareQuiz();
+  $("cqPanel").hidden = false;
+  sfx("tap");
+}
+function renderCareQuiz() {
+  const q = cq.q;
+  $("cqTag").textContent = (q.reviewId ? "🔁 복습 · " : "") + `${typeName(q.type)} ${stars(q.lvl)}`;
+  $("cqTag").classList.toggle("review", !!q.reviewId);
+  $("cqQ").textContent = q.text;
+  $("cqA").textContent = cq.input || " ";
+}
+function closeCareQuiz() {
+  $("cqPanel").hidden = true;
+  cq = null;
+  busy = false;
+  render();
+}
+function careQuizKey(k) {
+  if (!cq || cq.locked) return;
+  if (k === "ok") return checkCareQuiz();
+  if (k === "del") cq.input = cq.input.slice(0, -1);
+  else if (cq.input.length < 4) cq.input = (cq.input === "0" ? "" : cq.input) + k;
+  sfx("tap");
+  renderCareQuiz();
+}
+function checkCareQuiz() {
+  if (!cq.input) return;
+  const cur = cq, q = cur.q, ok = Number(cur.input) === q.answer;
+  cur.locked = true;
+  const lv = recordSkill(q, ok);
+  logAnswer(ok, "care");
+  const grad = q.reviewId ? reviewDone(q.reviewId, ok) : false;
+  if (!ok && !q.reviewId) addWrong(q);
+  if (grad) bump("grads");
+  save();
+  sfx(lv === "up" ? "grow" : ok ? "catch" : "nope");
+  let fb = ok ? "딩동댕! ⭕" : `아쉬워요! 정답은 ${q.answer}`;
+  if (grad) fb += "\n🎓 오답 졸업!";
+  if (lv === "up") fb += `\n🎉 ${typeName(q.type)} 레벨 업! ${stars(skill(q.type).lvl)}`;
+  if (!ok) fb += "\n비슷한 문제를 하나 더 풀어 봐요";
+  $("cqFeedback").textContent = fb;
+  $("cqFeedback").className = ok ? "ok" : "no";
+  setTimeout(() => {
+    if (cq !== cur) return; // 그 사이 창을 닫았으면 그만
+    if (ok) {
+      const run = cur.run;
+      closeCareQuiz();
+      run();
+      return;
+    }
+    cur.q = careQuizQuestion(q);
+    cur.input = "";
+    cur.locked = false;
+    $("cqFeedback").textContent = "";
+    $("cqFeedback").className = "";
+    renderCareQuiz();
+  }, ok ? (grad || lv === "up" ? 1400 : 700) : 2200);
+}
+document.querySelectorAll("[data-cq]").forEach((b) =>
+  b.addEventListener("click", () => careQuizKey(b.dataset.cq)));
+$("cqClose").addEventListener("click", () => { sfx("tap"); closeCareQuiz(); });
+document.addEventListener("keydown", (e) => {
+  if ($("cqPanel").hidden) return;
+  if (e.key === "Escape") closeCareQuiz();
+  else if (/^[0-9]$/.test(e.key)) careQuizKey(e.key);
+  else if (e.key === "Backspace") careQuizKey("del");
+  else if (e.key === "Enter") { e.preventDefault(); careQuizKey("ok"); }
 });
 
 // ---- 알 낳기 / 가족 앨범 ----
@@ -1513,52 +1637,32 @@ $("nameInput").addEventListener("input", (e) => {
   state.name = e.target.value.trim() || "도마";
   save();
 });
-// ---- 황금 열쇠 (어른용): 아기·어린·어른 단계로 바로 건너뛴다 ----
-// 고른 뒤 3자리 × 3자리 곱셈을 맞혀야 열린다 (아이들이 마음대로 못 쓰게)
-let keyTarget = null, keyAnswer = 0;
+// ---- 황금 열쇠 (어른용): 3자리 × 3자리 곱셈을 맞혀야 열린다 (아이들이 마음대로 못 쓰게) ----
+// 열면 학습 기록, 돌봄 문제 켜기/끄기, 성장 단계 건너뛰기가 있다.
+let keyAnswer = 0;
 const rand3 = () => 100 + Math.floor(Math.random() * 900);
 
 function openKey() {
   if (busy) return;
   busy = true;
   sfx("tap");
-  showKeyPick();
+  $("keyMsg").textContent = "";
+  newKeyQuestion();
+  $("keyLock").hidden = false;
+  $("keyMenu").hidden = true;
   $("keyPanel").hidden = false;
+  $("keyAns").focus();
 }
 function closeKey() {
   $("keyPanel").hidden = true;
   busy = false;
   render();
 }
-function showKeyPick() {
-  const now = stageNo();
-  const box = $("keyStages");
-  box.innerHTML = "";
-  STAGES.slice(1).forEach((s) => {
-    const i = STAGES.indexOf(s);
-    const b = document.createElement("button");
-    b.disabled = i <= now; // 지금 단계나 이미 지난 단계로는 못 간다
-    b.innerHTML = `${s.name}<small>${i === now ? "지금 단계예요" : i < now ? "이미 지났어요" : "여기까지 건너뛰기"}</small>`;
-    b.addEventListener("click", () => { sfx("tap"); showKeyLock(s); });
-    box.appendChild(b);
-  });
-  $("keyPick").hidden = false;
-  $("keyLock").hidden = true;
-}
 function newKeyQuestion() {
   const a = rand3(), b = rand3();
   keyAnswer = a * b;
   $("keyQ").textContent = `${a} × ${b} = ?`;
   $("keyAns").value = "";
-}
-function showKeyLock(s) {
-  keyTarget = s;
-  $("keyGoal").innerHTML = `<b>${s.name}</b>로 건너뛸까요?`;
-  $("keyMsg").textContent = "";
-  newKeyQuestion();
-  $("keyPick").hidden = true;
-  $("keyLock").hidden = false;
-  $("keyAns").focus();
 }
 function tryKey() {
   const v = Number($("keyAns").value.replace(/[^0-9]/g, ""));
@@ -1569,18 +1673,69 @@ function tryKey() {
     $("keyAns").focus();
     return;
   }
+  sfx("tap");
+  showKeyMenu();
+}
+function showKeyMenu() {
+  renderReport();
+  $("keyCareQuiz").checked = state.careQuiz;
+  const now = stageNo();
+  const box = $("keyStages");
+  box.innerHTML = "";
+  STAGES.slice(1).forEach((s) => {
+    const i = STAGES.indexOf(s);
+    const b = document.createElement("button");
+    b.disabled = i <= now; // 지금 단계나 이미 지난 단계로는 못 간다
+    b.innerHTML = `${s.name}<small>${i === now ? "지금 단계예요" : i < now ? "이미 지났어요" : "여기까지 건너뛰기"}</small>`;
+    b.addEventListener("click", () => jumpTo(s));
+    box.appendChild(b);
+  });
+  $("keyLock").hidden = true;
+  $("keyMenu").hidden = false;
+}
+function jumpTo(s) {
   tick();
   const before = stage();
-  if (state.careMin < keyTarget.care) state.careMin = keyTarget.care;
+  if (state.careMin < s.care) state.careMin = s.care;
   pickMorph();
   save();
   closeKey();
   const after = stage();
   if (after !== before) { sfx("grow"); say(grewText(before, after)); }
 }
+
+// 학습 기록: 최근 7일 푼 문제 수·정답률, 유형별 레벨·정답률, 오답 노트
+const pct = (ok, n) => (n ? Math.round((ok / n) * 100) + "%" : "-");
+function renderReport() {
+  const rows = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(Date.now() - i * 86400000), k = dayKey(d), r = state.mathLog[k];
+    const label = i === 0 ? "오늘" : i === 1 ? "어제" : `${d.getMonth() + 1}/${d.getDate()}`;
+    rows.push(`<tr><td>${label}</td><td>${r ? r.n : 0}</td><td>${r ? pct(r.ok, r.n) : "-"}</td>`
+      + `<td>${r ? (r.care || 0) : 0} / ${r ? (r.mission || 0) : 0}</td></tr>`);
+  }
+  $("keyDays").innerHTML = `<table class="key-table"><tr><th>날짜</th><th>푼 문제</th><th>정답률</th><th>돌봄 / 미션</th></tr>${rows.join("")}</table>`;
+
+  const types = (MATH_TYPES[state.mathGrade] || []).map((t) => {
+    const s = state.mathSkill[t.id];
+    const acc = s && s.hist.length ? accuracy(s) : null;
+    const weak = acc !== null && s.hist.length >= 3 && acc < 0.6;
+    return `<tr class="${weak ? "weak" : ""}"><td>${t.name}</td><td>${stars(s ? s.lvl : LEVEL_START)}</td>`
+      + `<td>${acc === null ? "-" : Math.round(acc * 100) + "%"}</td></tr>`;
+  });
+  $("keyTypes").innerHTML = `<p class="key-sub">${state.mathGrade}학년 유형별 (최근 10문제 정답률, 60% 미만은 주황색)</p>`
+    + `<table class="key-table"><tr><th>유형</th><th>레벨</th><th>정답률</th></tr>${types.join("")}</table>`;
+
+  const wrong = gradeWrong();
+  $("keyWrong").innerHTML = `<p class="key-sub">📒 오답 노트 ${wrong.length}개</p>`
+    + (wrong.length ? `<ul class="key-wrong">${wrong.slice(-10).reverse().map((w) =>
+      `<li>${w.text} → <b>${w.answer}</b></li>`).join("")}</ul>` : "");
+}
+
 $("keyBtn").addEventListener("click", openKey);
 $("keyClose").addEventListener("click", closeKey);
-$("keyBack").addEventListener("click", () => { sfx("tap"); showKeyPick(); });
+$("keyDone").addEventListener("click", closeKey);
+$("keyCareQuiz").addEventListener("change", (e) => { state.careQuiz = e.target.checked; save(); });
 $("keyOk").addEventListener("click", tryKey);
 $("keyAns").addEventListener("keydown", (e) => { if (e.key === "Enter") tryKey(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("keyPanel").hidden) closeKey(); });

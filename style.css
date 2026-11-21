@@ -297,35 +297,35 @@ progress::-moz-progress-bar { border-radius: 999px;
 #mathGrades button:active { transform: translateY(3px); box-shadow: 0 1px 0 #d3c7f5; }
 #mathToday { font-size: .9rem; color: #6a5d8a; }
 /* 큰 보라 버튼 (시작/다시 하기)과 숫자판 확인 버튼 */
-.m-big, #mathPad .m-ok { border: 0; color: #fff; cursor: pointer; text-shadow: 0 2px 0 #0003;
+.m-big, #mathPad .m-ok, #cqPad .m-ok { border: 0; color: #fff; cursor: pointer; text-shadow: 0 2px 0 #0003;
   background: linear-gradient(#a084f0, #7c4dff); box-shadow: inset 0 2px 0 #fff5, 0 5px 0 #5531c9, 0 8px 12px #5531c940; }
 .m-big { display: block; width: 100%; margin: 12px 0 6px; padding: 14px; border-radius: 16px; font-size: 1.2rem; font-weight: bold; }
-.m-big:active, #mathPad .m-ok:active { transform: translateY(4px); box-shadow: inset 0 2px 0 #fff5, 0 1px 0 #5531c9; }
+.m-big:active, #mathPad .m-ok:active, #cqPad .m-ok:active { transform: translateY(4px); box-shadow: inset 0 2px 0 #fff5, 0 1px 0 #5531c9; }
 #mathDots { display: flex; justify-content: center; gap: 8px; margin: 4px 0 12px; }
 #mathDots span { width: 14px; height: 14px; border-radius: 50%; background: #e3dcf7; box-shadow: inset 0 2px 3px #0002; }
 #mathDots .now { background: #fff; box-shadow: 0 0 0 3px #7c4dff; }
 #mathDots .ok { background: radial-gradient(circle at 35% 30%, #a5e8a8, #43a047); }
 #mathDots .no { background: radial-gradient(circle at 35% 30%, #ffab91, #e53935); }
-#mathQ { font-size: 2.2rem; font-weight: bold; letter-spacing: 1px; }
-#mathA { margin: 8px auto 4px; width: 60%; padding: 6px; border-radius: 14px; font-size: 2rem; font-weight: bold; color: #5531c9;
+#mathQ, #cqQ { font-size: 2.2rem; font-weight: bold; letter-spacing: 1px; }
+#mathA, #cqA { margin: 8px auto 4px; width: 60%; padding: 6px; border-radius: 14px; font-size: 2rem; font-weight: bold; color: #5531c9;
   background: #fff; box-shadow: inset 0 3px 6px #0002, 0 1px 0 #fff; }
-#mathFeedback { min-height: 1.6em; font-weight: bold; white-space: pre-line; }
-#mathTag { display: inline-block; margin-bottom: 6px; padding: 2px 10px; border-radius: 999px; font-size: .85rem; background: #efe9fc; color: #5531c9; }
-#mathTag.review { background: #fff3e0; color: #e65100; font-weight: bold; }
+#mathFeedback, #cqFeedback { min-height: 1.6em; font-weight: bold; white-space: pre-line; }
+#mathTag, #cqTag { display: inline-block; margin-bottom: 6px; padding: 2px 10px; border-radius: 999px; font-size: .85rem; background: #efe9fc; color: #5531c9; }
+#mathTag.review, #cqTag.review { background: #fff3e0; color: #e65100; font-weight: bold; }
 #mathReview { font-size: .9rem; color: #6a5d8a; }
 #mathSkillsBox { margin: 8px 0; padding: 8px; border-radius: 14px; background: #f6f3fd; font-size: .9rem; color: #5531c9; }
 #mathSkillsBox small { color: #6a5d8a; }
 #mathSkills { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 6px; }
 #mathSkills span { padding: 3px 8px; border-radius: 999px; background: #fff; border: 1px solid #d3c7f5; font-size: .8rem; white-space: nowrap; }
 #mathSkills span.weak { border-color: #ffb74d; background: #fff3e0; color: #e65100; }
-#mathFeedback.ok { color: #2e7d32; }
-#mathFeedback.no { color: #d84315; }
-#mathPad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
-#mathPad button { padding: 12px 0; border-radius: 14px; font-size: 1.5rem; font-weight: bold; touch-action: manipulation; user-select: none; }
-#mathPad button:not(.m-ok) { border: 0; color: var(--ink); cursor: pointer;
+#mathFeedback.ok, #cqFeedback.ok { color: #2e7d32; }
+#mathFeedback.no, #cqFeedback.no { color: #d84315; }
+#mathPad, #cqPad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; }
+#mathPad button, #cqPad button { padding: 12px 0; border-radius: 14px; font-size: 1.5rem; font-weight: bold; touch-action: manipulation; user-select: none; }
+#mathPad button:not(.m-ok), #cqPad button:not(.m-ok) { border: 0; color: var(--ink); cursor: pointer;
   background: linear-gradient(#fff, #eef0f4); box-shadow: inset 0 2px 0 #fff, 0 4px 0 #c9cdd6, 0 6px 8px #0001; }
-#mathPad button:not(.m-ok):active { transform: translateY(3px); box-shadow: inset 0 2px 0 #fff, 0 1px 0 #c9cdd6; }
-#mathPad .m-ok { font-size: 1.15rem; }
+#mathPad button:not(.m-ok):active, #cqPad button:not(.m-ok):active { transform: translateY(3px); box-shadow: inset 0 2px 0 #fff, 0 1px 0 #c9cdd6; }
+#mathPad .m-ok, #cqPad .m-ok { font-size: 1.15rem; }
 #mathScore { font-size: 1.8rem; white-space: pre-line; line-height: 1.4; }
 #mathMsg { white-space: pre-line; font-weight: bold; }
 
@@ -506,3 +506,23 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
 @keyframes ripple { from { transform: scale(.3); opacity: .9; } to { transform: scale(3.4); opacity: 0; } }
 #room[data-floor="2"] #floor { filter: sepia(.35) saturate(1.3) brightness(.82) hue-rotate(-10deg); }
 #room[data-floor="3"] #floor { filter: sepia(.4) saturate(1.5) brightness(.72) hue-rotate(35deg); }
+
+/* ---- 돌봄 문제 창 ---- */
+#cqPanel { z-index: 55; }
+#cqPanel h2 { font-size: 1.2rem; }
+
+/* ---- 황금 열쇠: 학습 기록 ---- */
+#keyPanel .m-card { max-width: 460px; text-align: left; }
+#keyPanel h2, #keyLock { text-align: center; }
+#keyPanel h3 { margin: 16px 0 6px; font-size: 1rem; color: #8a6500; }
+.key-sub { margin: 10px 0 4px !important; font-size: .85rem; color: #6a5a3a; }
+.key-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.key-table th, .key-table td { padding: 4px 6px; border-bottom: 1px solid #f1e3b5; text-align: center; }
+.key-table th { color: #8a6500; font-weight: bold; background: #fff3cd; }
+.key-table td:first-child, .key-table th:first-child { text-align: left; }
+.key-table tr.weak td { color: #e65100; font-weight: bold; }
+.key-wrong { margin: 4px 0; padding-left: 18px; font-size: .9rem; columns: 2; }
+.key-toggle { display: block; padding: 8px 10px; border-radius: 12px; background: #fff; border: 2px solid #ffe082; font-weight: bold; cursor: pointer; }
+.key-toggle input { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; }
+.key-toggle small { display: block; margin: 2px 0 0 26px; font-weight: normal; color: #6a5a3a; }
+#keyPanel #keyStages { margin-top: 4px; }
