@@ -2337,6 +2337,34 @@ function imgToRoom(u, v) {
   return [(x - room.left) / room.width * 100, (y - room.top) / room.height * 100];
 }
 
+// ---- 말풍선을 게코 얼굴 위에 (v0.32.0) ----
+// 매 프레임 머리 위치를 따라간다. 사육장 밖으로 나가지 않게 좌우·위를 막고, 꼬리는 머리를 가리킨다.
+// 그림이 없거나 자는 그림처럼 머리 위치(head)를 모를 때는 그림 기준 대략적인 머리 자리를 쓴다.
+const BUBBLE_GAP = 10; // 눈보다 이만큼(그림 기준 %) 위에 말풍선 꼬리 끝
+function placeBubble() {
+  const b = $("bubble"), room = $("room");
+  const rw = room.clientWidth, rh = room.clientHeight;
+  if (!rw || !b.offsetWidth) return;
+  const pet = $("pet"), gone = pet.classList.contains("gone") || getComputedStyle(pet).display === "none";
+  let x = 50, y = 30; // 게코가 숨었을 때는 위쪽 가운데
+  if (!gone) {
+    const egg = stage().key === "egg";
+    const [u, v] = head ? [head.eye[0], head.eye[1]] : egg ? [50, 30] : state.sleeping ? [76, 46] : [78, 38];
+    [x, y] = imgToRoom(u, v - BUBBLE_GAP);
+  }
+  const bw = b.offsetWidth / rw * 100, bh = b.offsetHeight / rh * 100;
+  const cx = Math.max(bw / 2 + 1, Math.min(100 - bw / 2 - 1, x));
+  const top = Math.max(bh + 2, Math.min(96, y));
+  b.style.left = cx.toFixed(2) + "%";
+  b.style.top = top.toFixed(2) + "%";
+  const tail = Math.max(-b.offsetWidth / 2 + 14, Math.min(b.offsetWidth / 2 - 14, (x - cx) / 100 * rw));
+  b.style.setProperty("--tail", tail.toFixed(1) + "px");
+}
+(function bubbleLoop() {
+  if (!document.hidden) { try { placeBubble(); } catch (e) { /* 그림이 아직 준비 안 됨 */ } }
+  requestAnimationFrame(bubbleLoop);
+})();
+
 // ---- 혀 날름 / 혀로 눈 핥기 (레오파드 게코는 혀로 눈을 닦는다) ----
 let petting = false;
 function canFidget() {
