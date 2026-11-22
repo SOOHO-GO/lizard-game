@@ -1548,19 +1548,28 @@ function pickWord(prev) {
   return w;
 }
 
-// 단어 읽어 주기 (안드로이드 크롬의 구글 음성). 영어 목소리를 고른다
+// 단어 읽어 주기 (안드로이드 크롬의 구글 음성). v0.20.0: 그림 없이 소리로만 알려 준다
+// "단어 → 한국어 뜻 → 단어(발음 한 번 더)" 순서로 읽는다
 const canSpeak = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
-function speakWord(word, slow) {
-  if (!canSpeak) return;
+function utter(text, lang, rate) {
   const ss = window.speechSynthesis;
-  ss.cancel();
-  const u = new SpeechSynthesisUtterance(word);
-  u.lang = "en-US";
-  const vs = ss.getVoices();
-  const v = vs.find((x) => /^en[-_]US/i.test(x.lang)) || vs.find((x) => /^en/i.test(x.lang));
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  const re = lang === "ko-KR" ? /^ko/i : /^en/i;
+  const vs = ss.getVoices().filter((x) => re.test(x.lang));
+  const v = vs.find((x) => /US|KR/i.test(x.lang)) || vs[0];
   if (v) u.voice = v;
-  u.rate = slow ? 0.6 : 0.8;
+  u.rate = rate;
   ss.speak(u);
+}
+const koSay = (ko) => ko.replace(/\(.*?\)/g, "").trim(); // "언제 (의문사)" → "언제"
+function speakWord(w, slow) {
+  if (!canSpeak) return;
+  window.speechSynthesis.cancel();
+  const [word, , ko] = w;
+  utter(word, "en-US", slow ? 0.6 : 0.8);
+  utter(koSay(ko), "ko-KR", 1);
+  utter(word, "en-US", slow ? 0.5 : 0.7);
 }
 if (canSpeak) window.speechSynthesis.getVoices(); // 목소리 목록을 미리 불러 둔다
 
@@ -1596,14 +1605,13 @@ function openSpell(act, run) {
   sfx("tap");
 }
 function newSpellRound() {
-  $("spFeedback").textContent = canSpeak ? "잘 듣고 철자를 써 봐요" : "소리가 안 나와요 😢 그림을 보고 써 봐요";
+  $("spFeedback").textContent = canSpeak ? "잘 듣고 철자를 써 봐요" : "소리가 안 나와요 😢 태블릿 음성 설정을 확인해 주세요";
   $("spFeedback").className = "";
   renderSpell();
-  setTimeout(() => { if (sp) speakWord(sp.w[0]); }, 250);
+  setTimeout(() => { if (sp) speakWord(sp.w); }, 250);
 }
 function renderSpell() {
-  const [word, pic, ko] = sp.w;
-  $("spPic").textContent = pic;
+  const [word, , ko] = sp.w;
   $("spKo").textContent = ko;
   $("spLen").textContent = `${word.length}글자`;
   const left = SPELL_TRIES - sp.tries.length;
@@ -1621,7 +1629,7 @@ function closeSpell() {
 function spellKey(k) {
   if (!sp || sp.locked) return;
   if (k === "ok") return checkSpell();
-  if (k === "say") { sfx("tap"); return speakWord(sp.w[0], sp.tries.length > 0); }
+  if (k === "say") { sfx("tap"); return speakWord(sp.w, sp.tries.length > 0); }
   if (k === "del") sp.input = sp.input.slice(0, -1);
   else if (sp.input.length < 10) sp.input += k;
   sfx("tap");
@@ -1659,7 +1667,7 @@ function checkSpell() {
     $("spFeedback").textContent = `틀렸어요! 빨간 글자를 고쳐 봐요 (남은 기회 ${SPELL_TRIES - cur.tries.length}번)`;
     $("spFeedback").className = "no";
     renderSpell();
-    speakWord(word, true); // 틀릴 때마다 한 번 더 (조금 천천히) 읽어 준다
+    speakWord(cur.w, true); // 틀릴 때마다 한 번 더 (조금 천천히) 읽어 준다
     return;
   }
   // 기회를 다 쓰면 정답을 보여 주고 새 단어
@@ -1672,14 +1680,14 @@ function checkSpell() {
   $("spA").innerHTML = `<span class="sp-ok">${word}</span>`;
   $("spFeedback").textContent = `정답은 ${word} 예요\n새 단어로 다시 해 봐요`;
   $("spFeedback").className = "no";
-  speakWord(word, true);
+  speakWord(cur.w, true);
   setTimeout(() => {
     if (sp !== cur) return;
     cur.w = pickWord(cur.w);
     cur.tries = [];
     cur.locked = false;
     newSpellRound();
-  }, 3500);
+  }, 5500); // 정답 읽기(단어·뜻·단어)가 끝날 때까지 기다린다
 }
 // 화면 키보드 (태블릿 자판이 창을 가리지 않게 직접 만든다)
 (() => {
