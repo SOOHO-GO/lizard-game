@@ -1929,7 +1929,8 @@ const CHECKLIST = [
   { title: "🏫 방과후", items: [
     ["a1", "책가방, 학원가방 정리 및 미리 싸기"], ["a2", "학교숙제 먼저!!"], ["a3", "오자마자 바로 손씻기"]] },
   { title: "🌙 저녁", items: [
-    ["e1", "공부 다했는지 체크"], ["e2", "영양제 챙겨먹기"], ["e3", "내가 쓴 물건 제자리"], ["e4", "집안일 했는가요?"]] },
+    ["e1", "공부 다했는지 체크"], ["e2", "영양제 챙겨먹기"], ["e3", "내가 쓴 물건 제자리"], ["e4", "집안일 했는가요?"],
+    ["e5", "버릇없는 행동 3회 초과 하지 않았나요?", "(고개돌리기, 발구르기 등등)"]] },
 ];
 const CHECK_IDS = CHECKLIST.flatMap((g) => g.items.map((i) => i[0]));
 let checkSay = "";
@@ -1952,12 +1953,13 @@ function renderCheck(msg) {
     const h = document.createElement("h3");
     h.textContent = g.title;
     col.appendChild(h);
-    for (const [id, text] of g.items) {
+    for (const [id, text, note] of g.items) {
       const on = state.checks.includes(id);
       const b = document.createElement("button");
       b.className = "chk" + (on ? " on" : "");
       b.innerHTML = `<span class="box">${on ? "✔" : ""}</span><span></span>`;
       b.lastChild.textContent = text;
+      if (note) { const sm = document.createElement("small"); sm.textContent = note; b.lastChild.appendChild(sm); }
       b.addEventListener("click", () => toggleCheck(id));
       col.appendChild(b);
     }

@@ -297,6 +297,7 @@ progress::-moz-progress-bar { border-radius: 999px;
 #checkList .chk.on { border-color: #22a35a; background: #eafaf0; }
 #checkList .chk.on .box { border-color: #22a35a; background: #22a35a; }
 #checkList .chk.on span:last-child { color: #16753e; }
+#checkList .chk small { display: block; font-size: .8rem; color: #8a7f9e; }
 
 /* ---- 수학 미션 창 ---- */
 [hidden] { display: none !important; }
