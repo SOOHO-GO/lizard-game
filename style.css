@@ -283,7 +283,11 @@ progress::-moz-progress-bar { border-radius: 999px;
 #checkPanel progress { width: 100%; height: 16px; }
 #checkMsg { font-weight: bold; color: #16753e; white-space: pre-line; }
 #checkStreak { margin: 4px 0; padding: 4px 10px; border-radius: 999px; display: inline-block; background: #fff3e0; color: #e65100; font-size: .9rem; font-weight: bold; }
-#checkList { text-align: left; }
+#checkPanel .m-card { max-width: 980px; }
+#checkList { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: left; }
+.chk-col { padding: 4px 10px 6px; border-radius: 16px; background: #f6f3fd; }
+@media (max-width: 640px) { #checkList { grid-template-columns: 1fr; } }
+#checkPanel .m-big { max-width: 320px; margin-left: auto; margin-right: auto; }
 #checkList h3 { margin: 12px 0 6px; font-size: 1.05rem; color: #5531c9; }
 #checkList .chk { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 6px; padding: 10px 12px; border: 2px solid #d7e8dc;
   border-radius: 14px; background: #fff; font: inherit; font-size: 1rem; text-align: left; color: var(--ink); cursor: pointer; touch-action: manipulation; }

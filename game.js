@@ -1808,9 +1808,12 @@ function renderCheck(msg) {
   const box = $("checkList");
   box.innerHTML = "";
   for (const g of CHECKLIST) {
+    const col = document.createElement("div"); // 아침·방과후·저녁을 가로로 나란히
+    col.className = "chk-col";
+    box.appendChild(col);
     const h = document.createElement("h3");
     h.textContent = g.title;
-    box.appendChild(h);
+    col.appendChild(h);
     for (const [id, text] of g.items) {
       const on = state.checks.includes(id);
       const b = document.createElement("button");
@@ -1818,7 +1821,7 @@ function renderCheck(msg) {
       b.innerHTML = `<span class="box">${on ? "✔" : ""}</span><span></span>`;
       b.lastChild.textContent = text;
       b.addEventListener("click", () => toggleCheck(id));
-      box.appendChild(b);
+      col.appendChild(b);
     }
   }
   const n = checkCount();
