@@ -827,10 +827,16 @@ function wander() {
   clearTimeout(wanderTimer);
   if (petting) { wanderTimer = setTimeout(wander, 1500); return; } // 쓰다듬는 동안은 가만히
   let sec = 0, pause = 1500 + Math.random() * 3500;
+  // 깨면 은신처에서 나온다
+  if (!state.sleeping || stage().key === "egg") {
+    $("pet").classList.remove("inhide");
+    if (goingHide) { clearTimeout(hideTimer); goingHide = false; }
+  }
   if (stage().key === "egg") {
     if (petX !== PET_CENTER_X) placeAt(PET_CENTER_X);
   } else if (state.sleeping) {
-    sec = walkTo(HIDE_X, 4); // 잘 때는 은신처 옆으로
+    if (!$("pet").classList.contains("inhide")) goIntoHide(); // 잘 때는 은신처 안으로 쏙
+    pause = 4000;
   } else if (!busy && !action && tempZone() === "hot") {
     sec = walkTo(HIDE_X, 5); // 더우면 그늘진 은신처로 피한다
   } else if (!busy && !action && tempZone() === "cold") {
@@ -843,6 +849,36 @@ function wander() {
     if (Math.random() < (sad ? 0.3 : 0.7)) sec = walkTo(randX(), sad ? 3 : 6);
   }
   wanderTimer = setTimeout(wander, sec * 1000 + pause);
+}
+
+// ---- 잘 때는 은신처 안으로 (v0.33.0) ----
+// 머리가 은신처 입구에 오도록 걸어간 뒤, 왼쪽(입구)을 보고 머리부터 쏙 들어간다.
+const HIDE_HEAD_U = 80; // 그림에서 머리의 가로 위치(%)
+function hideEntranceX() {
+  const h = document.querySelector(".d-hide"), room = $("room").getBoundingClientRect();
+  if (!h || !room.width) return 20;
+  const r = h.getBoundingClientRect();
+  return (r.left + r.width * 0.5 - room.left) / room.width * 100; // 동굴 입구 가운데
+}
+function sleepX() {
+  const p = $("pet"), rw = $("room").clientWidth || 1, size = Math.min(p.offsetWidth, p.offsetHeight);
+  // 왼쪽을 보면 그림이 뒤집혀서 머리는 틀 왼쪽에서 (100-80)% 자리에 온다
+  const headOff = ((p.offsetWidth - size) / 2 + size * (1 - HIDE_HEAD_U / 100)) / rw * 100;
+  return hideEntranceX() - headOff;
+}
+let hideTimer, goingHide = false;
+function goIntoHide() {
+  if (goingHide) return; // 이미 걸어가는 중
+  const pet = $("pet");
+  goingHide = true;
+  const sec = walkTo(sleepX(), 4);
+  hideTimer = setTimeout(() => {
+    goingHide = false;
+    if (!state.sleeping || stage().key === "egg") return;
+    facing = -1; // 입구를 보고
+    pet.style.setProperty("--face", facing);
+    pet.classList.add("inhide");
+  }, sec * 1000 + 300);
 }
 
 // 방 안에 효과(먹이, 벌레, 거품)를 띄운다. 위치는 방 크기 기준 %
@@ -2347,7 +2383,11 @@ function placeBubble() {
   if (!rw || !b.offsetWidth) return;
   const pet = $("pet"), gone = pet.classList.contains("gone") || getComputedStyle(pet).display === "none";
   let x = 50, y = 30; // 게코가 숨었을 때는 위쪽 가운데
-  if (!gone) {
+  if (pet.classList.contains("inhide")) { // 은신처 안에서 자는 중: 동굴 위에
+    const h = document.querySelector(".d-hide").getBoundingClientRect(), rr = room.getBoundingClientRect();
+    x = (h.left + h.width * 0.5 - rr.left) / rr.width * 100;
+    y = (h.top + h.height * 0.08 - rr.top) / rr.height * 100;
+  } else if (!gone) {
     const egg = stage().key === "egg";
     const [u, v] = head ? [head.eye[0], head.eye[1]] : egg ? [50, 30] : state.sleeping ? [76, 46] : [78, 38];
     [x, y] = imgToRoom(u, v - BUBBLE_GAP);

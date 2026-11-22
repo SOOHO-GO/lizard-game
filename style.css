@@ -102,7 +102,7 @@ h1 { margin: 8px 0 12px; font-size: 1.6rem; color: var(--accent);
 #decor svg { position: absolute; filter: drop-shadow(0 4px 3px #0006); }
 #decor .d-plant { filter: drop-shadow(5px 6px 4px #0005); }
 .d-plant { left: 5%; bottom: calc(100% - var(--floor) - 6%); width: 14%; }
-.d-hide { left: 2%; bottom: 3%; width: 32%; }
+.d-hide { left: 1%; bottom: 3%; width: 46%; } /* v0.33.0: 게코가 들어가 잘 수 있게 크게 */
 .d-dish { right: 5%; bottom: 4%; width: 21%; }
 /* 앞유리 반사광 + 가운데 미닫이 문틈 */
 #glass { position: absolute; inset: 0; z-index: 2; pointer-events: none;
@@ -517,7 +517,7 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
 /* ---- 사육장 업그레이드 그림 (#room의 data-hide / data-dish / data-floor) ---- */
 #hideMoss, #hideGems, .ripple { display: none; }
 #room[data-hide="2"] #hideMoss, #room[data-hide="3"] #hideMoss, #room[data-hide="3"] #hideGems { display: inline; }
-#room[data-hide="3"] .d-hide { width: 35%; }
+#room[data-hide="3"] .d-hide { width: 50%; }
 #room[data-dish="2"] .d-dish { width: 24%; }
 #room[data-dish="2"] #bowlG stop:first-child { stop-color: #d6ecff; }
 #room[data-dish="2"] #bowlG stop:last-child { stop-color: #3f79bd; }
@@ -587,3 +587,15 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
 #matchGrid .mcard.up { background: #fff; box-shadow: inset 0 0 0 3px #d3c7f5, 0 4px 0 #c9cdd6; transform: rotateY(180deg) scaleX(-1); }
 #matchGrid .mcard.done { background: #eafaf0; box-shadow: inset 0 0 0 3px #22a35a, 0 2px 0 #16753e; opacity: .85; }
 #matchGrid .mcard:active { transform: translateY(3px); }
+
+/* ---- 잘 때 은신처 안으로 (v0.33.0) ---- */
+/* 머리(그림의 오른쪽 80%, 뒤집혀서 화면에선 입구 쪽)를 기준으로 작아지며 동굴 속으로 사라진다 */
+#pet.inhide #petBody { transform-origin: 80% 78%; transform: translateX(14%) translateY(4%) scale(.25); opacity: 0;
+  transition: transform 1.4s ease-in, opacity 1.1s ease-in .3s; }
+#pet.inhide::after { opacity: 0; transition: opacity .8s; }
+#pet.inhide { pointer-events: none; }
+/* 동굴 안에서 자는 동안 입구 위로 zzz (예전 왼쪽 위 zzz는 숨긴다) */
+#hideZzz { display: none; }
+#room.night #hideZzz { display: inline; animation: hide-zzz 2.4s ease-in-out infinite; transform-box: fill-box; }
+@keyframes hide-zzz { 0% { transform: translate(0, 6px); opacity: .2; } 50% { opacity: 1; } 100% { transform: translate(8px, -10px); opacity: .2; } }
+#room.night #dark { display: none; }
