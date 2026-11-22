@@ -131,7 +131,7 @@ function newState() {
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
            careQuiz: true, mathLog: {},
            temp: 29, lampOn: true, fanOn: false, mathGrade: 2, mathDay: "", mathClears: 0,
-           mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [],
+           mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [], checkDay: "", checks: [], checkDone: false,
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
            gen: 1, history: [], morph: null, born: now, last: now };
@@ -150,6 +150,7 @@ function fromSave(s) {
   if (!st.mathSkill || typeof st.mathSkill !== "object" || Array.isArray(st.mathSkill)) st.mathSkill = {};
   if (!Array.isArray(st.mathWrong)) st.mathWrong = [];
   if (!Array.isArray(st.spellWrong)) st.spellWrong = [];
+  if (!Array.isArray(st.checks)) st.checks = [];
   if (typeof st.treats !== "number") st.treats = 0;
   // 꾸미기가 없던 저장본
   if (!st.stats || typeof st.stats !== "object") st.stats = {};
@@ -489,6 +490,7 @@ function render() {
   fogKick();
   checkDecor();
   $("decorNew").hidden = !state.decorGot.some((id) => !state.decorSeen.includes(id));
+  if (window.checkReady) renderCheckBtn();
   renderUpgrades();
 }
 
@@ -1766,6 +1768,98 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Backspace") spellKey("del");
   else if (e.key === "Enter") { e.preventDefault(); spellKey("ok"); }
 });
+
+// ---- Today CheckList: 하루 생활 체크리스트. 다 체크하면 하루 한 번 성장 6시간 빨라짐 ----
+// 체크는 날짜가 바뀌면 처음부터. 보상을 받은 뒤 체크를 풀어도 보상은 그대로 둔다.
+const CHECK_GROW_MIN = 6 * 60;
+const CHECKLIST = [
+  { title: "🌅 아침", items: [
+    ["m1", "스스로 빠르게 일어나기"], ["m2", "옷 바르게 갈아입기"], ["m3", "아침 연산 눈높이 \"조용히\""],
+    ["m4", "영양제 챙겨먹기"], ["m5", "학원가방 챙기기"]] },
+  { title: "🏫 방과후", items: [
+    ["a1", "책가방, 학원가방 정리 및 미리 싸기"], ["a2", "학교숙제 먼저!!"], ["a3", "오자마자 바로 손씻기"]] },
+  { title: "🌙 저녁", items: [
+    ["e1", "공부 다했는지 체크"], ["e2", "영양제 챙겨먹기"], ["e3", "내가 쓴 물건 제자리"]] },
+];
+const CHECK_IDS = CHECKLIST.flatMap((g) => g.items.map((i) => i[0]));
+let checkSay = "";
+function checkToday() {
+  if (state.checkDay !== today()) { state.checkDay = today(); state.checks = []; state.checkDone = false; }
+}
+const checkCount = () => CHECK_IDS.filter((id) => state.checks.includes(id)).length;
+function renderCheckBtn() {
+  checkToday();
+  $("checkLeft").textContent = state.checkDone ? "🎉 오늘 완료! 성장 6시간 빨라졌어요" : `${checkCount()} / ${CHECK_IDS.length}`;
+}
+function renderCheck(msg) {
+  checkToday();
+  const box = $("checkList");
+  box.innerHTML = "";
+  for (const g of CHECKLIST) {
+    const h = document.createElement("h3");
+    h.textContent = g.title;
+    box.appendChild(h);
+    for (const [id, text] of g.items) {
+      const on = state.checks.includes(id);
+      const b = document.createElement("button");
+      b.className = "chk" + (on ? " on" : "");
+      b.innerHTML = `<span class="box">${on ? "✔" : ""}</span><span></span>`;
+      b.lastChild.textContent = text;
+      b.addEventListener("click", () => toggleCheck(id));
+      box.appendChild(b);
+    }
+  }
+  const n = checkCount();
+  $("checkProg").max = CHECK_IDS.length;
+  $("checkProg").value = n;
+  $("checkMsg").textContent = msg !== undefined ? msg
+    : state.checkDone ? "🎉 오늘 체크리스트 완료! 성장이 6시간 빨라졌어요"
+    : `${n} / ${CHECK_IDS.length} · 다 체크하면 성장 6시간 빨라짐!`;
+  renderCheckBtn();
+}
+function toggleCheck(id) {
+  checkToday();
+  const i = state.checks.indexOf(id);
+  if (i >= 0) state.checks.splice(i, 1); else state.checks.push(id);
+  sfx("tap");
+  let msg;
+  if (!state.checkDone && checkCount() === CHECK_IDS.length) msg = giveCheckReward();
+  save();
+  renderCheck(msg);
+}
+function giveCheckReward() {
+  tick();
+  const before = stage();
+  state.checkDone = true;
+  state.careMin += CHECK_GROW_MIN;
+  state.happy = clamp(state.happy + 20);
+  pickMorph();
+  save();
+  const grew = stage() !== before;
+  sfx(grew ? "grow" : "yay");
+  checkSay = grew ? grewText(before, stage()) : "오늘 정말 멋졌어요! 쑥쑥 자랐어요 🦎";
+  return "🎉 다 했어요! 성장 6시간 빨라짐 · 행복 +20";
+}
+function openCheck() {
+  if (busy) return;
+  busy = true;
+  checkSay = "";
+  renderCheck();
+  $("checkPanel").hidden = false;
+  render();
+  sfx("tap");
+}
+function closeCheck() {
+  $("checkPanel").hidden = true;
+  busy = false;
+  render();
+  if (checkSay) { say(checkSay); checkSay = ""; }
+}
+$("checkBtn").addEventListener("click", openCheck);
+$("checkClose").addEventListener("click", closeCheck);
+$("checkDone").addEventListener("click", closeCheck);
+window.checkReady = true; // render()가 이 부분이 준비된 뒤에만 버튼 글씨를 그리게
+renderCheckBtn();
 
 // ---- 알 낳기 / 가족 앨범 ----
 // 다 키운 어른은 이름·세대·함께한 기간을 앨범에 남기고, 다음 세대가 알부터 다시 시작한다.

@@ -277,6 +277,20 @@ progress::-moz-progress-bar { border-radius: 999px;
 #actions #mistBtn { --top: #8fb6ff; --bot: #4a7fe0; --edge: #2f58a8; }
 #actions #mathBtn { grid-column: 1 / -1; --top: #a084f0; --bot: #7c4dff; --edge: #5531c9; }
 #mathLeft { display: block; font-size: .8rem; opacity: .9; }
+#actions #checkBtn { grid-column: 1 / -1; --top: #5fd08a; --bot: #22a35a; --edge: #16753e; }
+#checkLeft { display: block; font-size: .8rem; opacity: .9; }
+#checkPanel { z-index: 55; }
+#checkPanel progress { width: 100%; height: 16px; }
+#checkMsg { font-weight: bold; color: #16753e; white-space: pre-line; }
+#checkList { text-align: left; }
+#checkList h3 { margin: 12px 0 6px; font-size: 1.05rem; color: #5531c9; }
+#checkList .chk { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 6px; padding: 10px 12px; border: 2px solid #d7e8dc;
+  border-radius: 14px; background: #fff; font: inherit; font-size: 1rem; text-align: left; color: var(--ink); cursor: pointer; touch-action: manipulation; }
+#checkList .chk .box { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid #9bc5a8; border-radius: 8px;
+  background: #fff; color: #fff; font-weight: bold; }
+#checkList .chk.on { border-color: #22a35a; background: #eafaf0; }
+#checkList .chk.on .box { border-color: #22a35a; background: #22a35a; }
+#checkList .chk.on span:last-child { color: #16753e; }
 
 /* ---- 수학 미션 창 ---- */
 [hidden] { display: none !important; }
@@ -444,6 +458,7 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
   #actions { grid-template-columns: repeat(3, 1fr); gap: 12px; }
   #actions button { font-size: 1.15rem; padding: 16px 6px; }
   #actions #mathBtn { grid-column: auto; }
+  #actions #checkBtn { grid-column: 1 / -1; padding: 10px 6px; }
 }
 /* 가로 화면인데 높이가 낮은 기기(휴대폰 가로): 오른쪽을 더 촘촘하게 */
 @media (min-width: 700px) and (min-aspect-ratio: 1/1) and (max-height: 560px) {
