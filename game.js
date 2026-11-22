@@ -406,11 +406,46 @@ function renderPet(st, faces, svgFace) {
       svg.style.display = "none";
       fx.style.display = head ? "" : "none";
       if (head) tintLids(probe);
+      updateSink(probe);
     };
     probe.onerror = () => { if (shownKey === key) next(i + 1); };
     probe.src = tries[i];
   })(0);
 }
+
+// v0.29.0: 그림 아래쪽 투명한 여백만큼 게코를 내려서 발이 바닥(그림자)에 닿게 한다.
+// 그림마다 여백이 달라서 처음 불러올 때 맨 아래 불투명한 줄을 찾아 비율을 기억해 둔다.
+const sinkFrac = {};
+let curSinkFrac = 0;
+function bottomGap(im) {
+  if (sinkFrac[im.src] != null) return sinkFrac[im.src];
+  let frac = 0;
+  try {
+    const N = 128, c = document.createElement("canvas");
+    c.width = c.height = N;
+    const g = c.getContext("2d");
+    // object-fit: contain 과 같게 정사각형 안에 아래쪽 맞춤으로 그린다
+    const k = Math.min(N / im.naturalWidth, N / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+    g.drawImage(im, (N - w) / 2, N - h, w, h);
+    const d = g.getImageData(0, 0, N, N).data;
+    let row = N - 1;
+    for (; row > 0; row--) {
+      let hit = false;
+      for (let x = 0; x < N && !hit; x++) if (d[(row * N + x) * 4 + 3] > 80) hit = true;
+      if (hit) break;
+    }
+    frac = (N - 1 - row) / N;
+  } catch (e) { frac = 0; }
+  return (sinkFrac[im.src] = frac);
+}
+function updateSink(im) {
+  if (im) curSinkFrac = bottomGap(im);
+  const p = $("pet"), size = Math.min(p.offsetWidth, p.offsetHeight);
+  const on = $("petImg").style.display !== "none";
+  p.style.setProperty("--sink", (on ? curSinkFrac * size * 0.92 : 0).toFixed(1) + "px");
+}
+if (window.ResizeObserver) new ResizeObserver(() => updateSink()).observe($("pet"));
+else window.addEventListener("resize", () => updateSink());
 
 function lizardSvg(st, face) {
   if (st.key === "egg") {
