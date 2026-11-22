@@ -131,7 +131,7 @@ function newState() {
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
            careQuiz: true, mathLog: {},
            temp: 29, lampOn: true, fanOn: false, mathGrade: 2, mathDay: "", mathClears: 0,
-           mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [], checkDay: "", checks: [], checkDone: false,
+           mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [], checkDay: "", checks: [], checkDone: false, checkStreak: 0, checkLast: "",
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
            gen: 1, history: [], morph: null, born: now, last: now };
@@ -1772,6 +1772,18 @@ document.addEventListener("keydown", (e) => {
 // ---- Today CheckList: 하루 생활 체크리스트. 다 체크하면 하루 한 번 성장 6시간 빨라짐 ----
 // 체크는 날짜가 바뀌면 처음부터. 보상을 받은 뒤 체크를 풀어도 보상은 그대로 둔다.
 const CHECK_GROW_MIN = 6 * 60;
+// v0.26.0: 연속으로 다 한 날 보너스. 10일마다 +12시간, 그 밖의 5일마다(5·15·25일…) +6시간
+const STREAK_BONUS = (n) => (n % 10 === 0 ? 12 * 60 : n % 5 === 0 ? 6 * 60 : 0);
+const yesterday = () => new Date(Date.now() - 86400000).toDateString();
+// 어제도 오늘도 안 했으면 연속 기록이 끊긴 것 (보여 줄 때만 0으로)
+const streakNow = () => (state.checkLast === today() || state.checkLast === yesterday() ? state.checkStreak || 0 : 0);
+function streakHint() {
+  const n = streakNow();
+  let next = n + 1; // 다음 보너스 날 (오늘 아직 안 했으면 오늘부터 센다)
+  while (!STREAK_BONUS(next)) next++;
+  const left = next - n;
+  return (n ? `🔥 ${n}일 연속!` : "🔥 연속 기록 없음") + ` · ${left}일 더 하면 +${STREAK_BONUS(next) / 60}시간 보너스`;
+}
 const CHECKLIST = [
   { title: "🌅 아침", items: [
     ["m1", "스스로 빠르게 일어나기"], ["m2", "옷 바르게 갈아입기"], ["m3", "아침 연산 눈높이 \"조용히\""],
@@ -1779,7 +1791,7 @@ const CHECKLIST = [
   { title: "🏫 방과후", items: [
     ["a1", "책가방, 학원가방 정리 및 미리 싸기"], ["a2", "학교숙제 먼저!!"], ["a3", "오자마자 바로 손씻기"]] },
   { title: "🌙 저녁", items: [
-    ["e1", "공부 다했는지 체크"], ["e2", "영양제 챙겨먹기"], ["e3", "내가 쓴 물건 제자리"]] },
+    ["e1", "공부 다했는지 체크"], ["e2", "영양제 챙겨먹기"], ["e3", "내가 쓴 물건 제자리"], ["e4", "집안일 했는가요?"]] },
 ];
 const CHECK_IDS = CHECKLIST.flatMap((g) => g.items.map((i) => i[0]));
 let checkSay = "";
@@ -1815,6 +1827,7 @@ function renderCheck(msg) {
   $("checkMsg").textContent = msg !== undefined ? msg
     : state.checkDone ? "🎉 오늘 체크리스트 완료! 성장이 6시간 빨라졌어요"
     : `${n} / ${CHECK_IDS.length} · 다 체크하면 성장 6시간 빨라짐!`;
+  $("checkStreak").textContent = streakHint();
   renderCheckBtn();
 }
 function toggleCheck(id) {
@@ -1831,14 +1844,20 @@ function giveCheckReward() {
   tick();
   const before = stage();
   state.checkDone = true;
-  state.careMin += CHECK_GROW_MIN;
+  // 연속 기록: 어제도 다 했으면 이어서, 아니면 1일부터
+  state.checkStreak = state.checkLast === yesterday() ? (state.checkStreak || 0) + 1 : 1;
+  state.checkLast = today();
+  const bonus = STREAK_BONUS(state.checkStreak);
+  state.careMin += CHECK_GROW_MIN + bonus;
   state.happy = clamp(state.happy + 20);
   pickMorph();
   save();
   const grew = stage() !== before;
   sfx(grew ? "grow" : "yay");
   checkSay = grew ? grewText(before, stage()) : "오늘 정말 멋졌어요! 쑥쑥 자랐어요 🦎";
-  return "🎉 다 했어요! 성장 6시간 빨라짐 · 행복 +20";
+  return "🎉 다 했어요! 성장 6시간 빨라짐 · 행복 +20"
+    + (bonus ? `
+🔥 ${state.checkStreak}일 연속 보너스! 성장 ${bonus / 60}시간 더 빨라짐` : "");
 }
 function openCheck() {
   if (busy) return;

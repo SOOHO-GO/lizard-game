@@ -282,6 +282,7 @@ progress::-moz-progress-bar { border-radius: 999px;
 #checkPanel { z-index: 55; }
 #checkPanel progress { width: 100%; height: 16px; }
 #checkMsg { font-weight: bold; color: #16753e; white-space: pre-line; }
+#checkStreak { margin: 4px 0; padding: 4px 10px; border-radius: 999px; display: inline-block; background: #fff3e0; color: #e65100; font-size: .9rem; font-weight: bold; }
 #checkList { text-align: left; }
 #checkList h3 { margin: 12px 0 6px; font-size: 1.05rem; color: #5531c9; }
 #checkList .chk { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 6px; padding: 10px 12px; border: 2px solid #d7e8dc;
