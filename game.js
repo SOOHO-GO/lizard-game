@@ -114,7 +114,7 @@ function newState() {
            ageMin: 0, careMin: 0, sleeping: false, poopCount: 0, digest: [], water: 100,
            careQuiz: true, mathLog: {},
            temp: 29, lampOn: true, fanOn: false, mathGrade: 2, mathDay: "", mathClears: 0,
-           mathSkill: {}, mathWrong: [], treats: 0,
+           mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [],
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
            gen: 1, history: [], morph: null, born: now, last: now };
@@ -132,6 +132,7 @@ function fromSave(s) {
   // 실력 기록·오답 노트가 없던 저장본
   if (!st.mathSkill || typeof st.mathSkill !== "object" || Array.isArray(st.mathSkill)) st.mathSkill = {};
   if (!Array.isArray(st.mathWrong)) st.mathWrong = [];
+  if (!Array.isArray(st.spellWrong)) st.spellWrong = [];
   if (typeof st.treats !== "number") st.treats = 0;
   // 꾸미기가 없던 저장본
   if (!st.stats || typeof st.stats !== "object") st.stats = {};
@@ -1123,8 +1124,9 @@ function skill(id) {
 const accuracy = (s) => (s.hist.length ? s.hist.reduce((a, b) => a + b, 0) / s.hist.length : 0.5);
 
 // 약한 유형일수록 자주 나온다. 아직 별로 안 풀어 본 유형도 조금 더 자주. 한 미션에 같은 유형은 2개까지.
-function pickType(grade, used) {
-  const types = MATH_TYPES[grade] || MATH_TYPES[2];
+function pickType(grade, used, only) {
+  let types = MATH_TYPES[grade] || MATH_TYPES[2];
+  if (only) types = types.filter(only).length ? types.filter(only) : types;
   const famSize = {};
   types.forEach((t) => { famSize[t.fam] = (famSize[t.fam] || 0) + 1; });
   const ws = types.map((t) => {
@@ -1397,18 +1399,20 @@ function logAnswer(ok, src) {
 // ---- 돌봄 문제: 밥주기·놀아주기·청소·물 갈기·분무 전에 수학 한 문제 ----
 // 수학 미션과 같은 학년·같은 자동 난이도로 내고, 실력·오답 노트에도 똑같이 기록한다.
 // 맞히면 바로 그 돌봄을 하고, 틀리면 정답을 보여 준 뒤 같은 유형의 새 문제가 나온다.
-const CARE_QUIZ_TITLE = { feed: "🍎 밥 주기 전에 한 문제!", play: "⚽ 놀기 전에 한 문제!", clean: "🧹 청소하기 전에 한 문제!",
-  water: "💧 물 갈기 전에 한 문제!", mist: "💦 분무하기 전에 한 문제!" };
+// v0.17.0: 밥주기만 곱셈 문제, 나머지 돌봄은 영어 받아쓰기 (아래 "영어 받아쓰기" 부분)
+const CARE_QUIZ_TITLE = { feed: "🍎 밥 주기 전에 곱셈 한 문제!", play: "⚽ 놀기 전에 영어 받아쓰기!", clean: "🧹 청소하기 전에 영어 받아쓰기!",
+  water: "💧 물 갈기 전에 영어 받아쓰기!", mist: "💦 분무하기 전에 영어 받아쓰기!" };
+const isMulType = (id) => (ALL_TYPES.find((t) => t.id === id) || {}).fam === "×";
 let cq = null; // { act, run, q, input, locked }
 
 function careQuizQuestion(prev) {
   // 복습할 오답이 있으면 먼저 (돌봄 문제로도 오답 노트를 졸업할 수 있다)
-  const due = !prev && dueReviews().sort((a, b) => a.due - b.due)[0];
+  const due = !prev && dueReviews().filter((w) => isMulType(w.type)).sort((a, b) => a.due - b.due)[0];
   if (due) {
     const p = due.fix === 0 ? { text: due.text, answer: due.answer } : GEN[due.type](due.lvl);
     return Object.assign(p, { type: due.type, lvl: due.lvl, reviewId: due.id });
   }
-  const t = prev ? { id: prev.type } : pickType(state.mathGrade, {});
+  const t = prev ? { id: prev.type } : pickType(state.mathGrade, {}, (x) => x.fam === "×");
   const lvl = skill(t.id).lvl;
   let p;
   for (let i = 0; i < 20; i++) { p = GEN[t.id](lvl); if (!prev || p.text !== prev.text) break; }
@@ -1417,6 +1421,7 @@ function careQuizQuestion(prev) {
 
 function withCareQuiz(act, run) {
   if (!state.careQuiz) return run();
+  if (act !== "feed") return openSpell(act, run);
   busy = true;
   stopWalk();
   render();
@@ -1491,6 +1496,206 @@ document.addEventListener("keydown", (e) => {
   else if (/^[0-9]$/.test(e.key)) careQuizKey(e.key);
   else if (e.key === "Backspace") careQuizKey("del");
   else if (e.key === "Enter") { e.preventDefault(); careQuizKey("ok"); }
+});
+
+// ---- 영어 받아쓰기: 놀아주기·청소·물 갈기·분무 전에 단어 하나 ----
+// 단어를 소리로 읽어 주면 키보드로 철자를 쓴다. 소리 나는 대로 쓸 수 있는 쉬운 3~4글자 단어만.
+// 틀리면 틀린 글자를 빨갛게 보여 주고 한 번 더 읽어 준다. 기회는 5번,
+// 5번 다 틀리면 정답을 보여 준 뒤 새 단어가 나온다. 틀렸던 단어는 나중에 더 자주 나온다.
+const SPELL_TRIES = 5, SPELL_WRONG_KEEP = 20;
+const WORDS = [
+  ["cat", "🐱", "고양이"], ["dog", "🐶", "강아지"], ["pig", "🐷", "돼지"], ["hen", "🐔", "암탉"],
+  ["fox", "🦊", "여우"], ["cow", "🐮", "소"], ["bee", "🐝", "벌"], ["ant", "🐜", "개미"],
+  ["bat", "🦇", "박쥐"], ["owl", "🦉", "부엉이"], ["fish", "🐟", "물고기"], ["frog", "🐸", "개구리"],
+  ["duck", "🦆", "오리"], ["bug", "🐛", "벌레"], ["crab", "🦀", "게"], ["lion", "🦁", "사자"],
+  ["bird", "🐦", "새"], ["sun", "☀️", "해"], ["moon", "🌙", "달"], ["star", "⭐", "별"],
+  ["rain", "🌧️", "비"], ["tree", "🌳", "나무"], ["rose", "🌹", "장미"], ["nest", "🪺", "둥지"],
+  ["bus", "🚌", "버스"], ["car", "🚗", "자동차"], ["van", "🚐", "승합차"], ["jet", "✈️", "제트기"],
+  ["ship", "🚢", "배"], ["cup", "🥤", "컵"], ["hat", "🎩", "모자"], ["bed", "🛏️", "침대"],
+  ["egg", "🥚", "달걀"], ["milk", "🥛", "우유"], ["cake", "🎂", "케이크"], ["nut", "🥜", "땅콩"],
+  ["book", "📖", "책"], ["ball", "⚽", "공"], ["bag", "🎒", "가방"], ["pen", "🖊️", "펜"],
+  ["box", "📦", "상자"], ["map", "🗺️", "지도"], ["kite", "🪁", "연"], ["ring", "💍", "반지"],
+  ["sock", "🧦", "양말"], ["bell", "🔔", "종"], ["gift", "🎁", "선물"], ["drum", "🥁", "북"],
+  ["door", "🚪", "문"], ["home", "🏠", "집"], ["bone", "🦴", "뼈"], ["leg", "🦵", "다리"],
+  ["hand", "✋", "손"], ["nose", "👃", "코"], ["red", "🔴", "빨간색"], ["ten", "🔟", "열(10)"],
+  ["six", "6️⃣", "여섯(6)"], ["five", "5️⃣", "다섯(5)"], ["nine", "9️⃣", "아홉(9)"], ["king", "🤴", "왕"],
+  ["web", "🕸️", "거미줄"], ["log", "🪵", "통나무"], ["pot", "🍲", "냄비"], ["hot", "🔥", "뜨거운"],
+  ["sad", "😢", "슬픈"], ["run", "🏃", "달리다"],
+];
+let sp = null; // { act, run, w: [단어, 그림, 뜻], input, tries: [쓴 철자...], locked }
+let spRecent = [];
+
+function pickWord(prev) {
+  const ok = (w) => w[0] !== (prev && prev[0]) && !spRecent.includes(w[0]);
+  // 틀렸던 단어가 있으면 40% 확률로 그중에서
+  const wrong = WORDS.filter((w) => state.spellWrong.includes(w[0]) && ok(w));
+  const pool = wrong.length && Math.random() < 0.4 ? wrong : WORDS.filter(ok);
+  const w = pool[rand(0, pool.length - 1)] || WORDS[0];
+  spRecent.push(w[0]);
+  if (spRecent.length > 15) spRecent.shift();
+  return w;
+}
+
+// 단어 읽어 주기 (안드로이드 크롬의 구글 음성). 영어 목소리를 고른다
+const canSpeak = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+function speakWord(word, slow) {
+  if (!canSpeak) return;
+  const ss = window.speechSynthesis;
+  ss.cancel();
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang = "en-US";
+  const vs = ss.getVoices();
+  const v = vs.find((x) => /^en[-_]US/i.test(x.lang)) || vs.find((x) => /^en/i.test(x.lang));
+  if (v) u.voice = v;
+  u.rate = slow ? 0.6 : 0.8;
+  ss.speak(u);
+}
+if (canSpeak) window.speechSynthesis.getVoices(); // 목소리 목록을 미리 불러 둔다
+
+// 쓴 철자를 정답과 맞춰 보고 글자마다 맞음/틀림을 표시한다 (편집 거리로 맞춰서
+// "aple"처럼 한 글자 빠져도 뒤 글자까지 다 틀렸다고 나오지 않는다. 빠진 자리는 빨간 _)
+function markSpelling(typed, answer) {
+  const a = typed, b = answer, n = a.length, m = b.length;
+  const d = Array.from({ length: n + 1 }, (_, i) => Array.from({ length: m + 1 }, (_, j) => (i ? (j ? 0 : i) : j)));
+  for (let i = 1; i <= n; i++)
+    for (let j = 1; j <= m; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  const out = [];
+  let i = n, j = m;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && d[i][j] === d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)) {
+      out.push({ ch: a[i - 1], bad: a[i - 1] !== b[j - 1] }); i--; j--;
+    } else if (i > 0 && d[i][j] === d[i - 1][j] + 1) { out.push({ ch: a[i - 1], bad: true }); i--; }
+    else { out.push({ ch: "_", bad: true, miss: true }); j--; }
+  }
+  return out.reverse();
+}
+const markHtml = (typed, answer) => markSpelling(typed, answer)
+  .map((c) => (c.bad ? `<span class="${c.miss ? "sp-miss" : "sp-bad"}">${c.ch}</span>` : c.ch)).join("");
+
+function openSpell(act, run) {
+  busy = true;
+  stopWalk();
+  render();
+  sp = { act, run, w: pickWord(), input: "", tries: [], locked: false };
+  $("spTitle").textContent = CARE_QUIZ_TITLE[act] || "영어 받아쓰기!";
+  $("spPanel").hidden = false;
+  newSpellRound();
+  sfx("tap");
+}
+function newSpellRound() {
+  $("spFeedback").textContent = canSpeak ? "잘 듣고 철자를 써 봐요" : "소리가 안 나와요 😢 그림을 보고 써 봐요";
+  $("spFeedback").className = "";
+  renderSpell();
+  setTimeout(() => { if (sp) speakWord(sp.w[0]); }, 250);
+}
+function renderSpell() {
+  const [word, pic, ko] = sp.w;
+  $("spPic").textContent = pic;
+  $("spKo").textContent = ko;
+  $("spLen").textContent = `${word.length}글자`;
+  const left = SPELL_TRIES - sp.tries.length;
+  $("spLives").textContent = "기회 " + "❤️".repeat(left) + "🤍".repeat(SPELL_TRIES - left);
+  $("spA").textContent = sp.input || " ";
+  $("spTries").innerHTML = sp.tries.map((t) => `<div>${markHtml(t, word)}</div>`).join("");
+}
+function closeSpell() {
+  if (canSpeak) window.speechSynthesis.cancel();
+  $("spPanel").hidden = true;
+  sp = null;
+  busy = false;
+  render();
+}
+function spellKey(k) {
+  if (!sp || sp.locked) return;
+  if (k === "ok") return checkSpell();
+  if (k === "say") { sfx("tap"); return speakWord(sp.w[0], sp.tries.length > 0); }
+  if (k === "del") sp.input = sp.input.slice(0, -1);
+  else if (sp.input.length < 10) sp.input += k;
+  sfx("tap");
+  renderSpell();
+}
+function logSpell(ok) {
+  const k = dayKey(), r = state.mathLog[k] || (state.mathLog[k] = { n: 0, ok: 0, care: 0, mission: 0 });
+  r.spell = (r.spell || 0) + 1;
+  if (ok) r.spellOk = (r.spellOk || 0) + 1;
+}
+function checkSpell() {
+  if (!sp.input) return;
+  const cur = sp, word = cur.w[0], typed = cur.input, ok = typed === word;
+  if (ok) {
+    cur.locked = true;
+    logSpell(true);
+    if (!cur.tries.length) state.spellWrong = state.spellWrong.filter((x) => x !== word); // 한 번에 맞히면 졸업
+    save();
+    sfx("catch");
+    $("spA").innerHTML = `<span class="sp-ok">${word}</span>`;
+    $("spFeedback").textContent = cur.tries.length ? "딩동댕! ⭕ 끝까지 잘했어요" : "딩동댕! ⭕";
+    $("spFeedback").className = "ok";
+    setTimeout(() => {
+      if (sp !== cur) return;
+      const run = cur.run;
+      closeSpell();
+      run();
+    }, 900);
+    return;
+  }
+  cur.tries.push(typed);
+  cur.input = "";
+  sfx("nope");
+  if (cur.tries.length < SPELL_TRIES) {
+    $("spFeedback").textContent = `틀렸어요! 빨간 글자를 고쳐 봐요 (남은 기회 ${SPELL_TRIES - cur.tries.length}번)`;
+    $("spFeedback").className = "no";
+    renderSpell();
+    speakWord(word, true); // 틀릴 때마다 한 번 더 (조금 천천히) 읽어 준다
+    return;
+  }
+  // 기회를 다 쓰면 정답을 보여 주고 새 단어
+  cur.locked = true;
+  logSpell(false);
+  if (!state.spellWrong.includes(word)) state.spellWrong.push(word);
+  if (state.spellWrong.length > SPELL_WRONG_KEEP) state.spellWrong.shift();
+  save();
+  renderSpell();
+  $("spA").innerHTML = `<span class="sp-ok">${word}</span>`;
+  $("spFeedback").textContent = `정답은 ${word} 예요\n새 단어로 다시 해 봐요`;
+  $("spFeedback").className = "no";
+  speakWord(word, true);
+  setTimeout(() => {
+    if (sp !== cur) return;
+    cur.w = pickWord(cur.w);
+    cur.tries = [];
+    cur.locked = false;
+    newSpellRound();
+  }, 3500);
+}
+// 화면 키보드 (태블릿 자판이 창을 가리지 않게 직접 만든다)
+(() => {
+  const box = $("spKeys");
+  for (const row of ["qwertyuiop", "asdfghjkl", "zxcvbnm"]) {
+    const r = document.createElement("div");
+    for (const ch of row) {
+      const b = document.createElement("button");
+      b.textContent = ch;
+      b.dataset.sp = ch;
+      r.appendChild(b);
+    }
+    box.appendChild(r);
+  }
+  const r = document.createElement("div");
+  r.className = "sp-ctrl";
+  r.innerHTML = `<button data-sp="say">🔊 다시 듣기</button><button data-sp="del" aria-label="지우기">⌫</button>`
+    + `<button data-sp="ok" class="m-ok">확인</button>`;
+  box.appendChild(r);
+  box.addEventListener("click", (e) => { const b = e.target.closest("[data-sp]"); if (b) spellKey(b.dataset.sp); });
+})();
+$("spClose").addEventListener("click", () => { sfx("tap"); closeSpell(); });
+document.addEventListener("keydown", (e) => {
+  if ($("spPanel").hidden) return;
+  if (e.key === "Escape") closeSpell();
+  else if (/^[a-zA-Z]$/.test(e.key)) spellKey(e.key.toLowerCase());
+  else if (e.key === "Backspace") spellKey("del");
+  else if (e.key === "Enter") { e.preventDefault(); spellKey("ok"); }
 });
 
 // ---- 알 낳기 / 가족 앨범 ----
@@ -1712,9 +1917,11 @@ function renderReport() {
     const d = new Date(Date.now() - i * 86400000), k = dayKey(d), r = state.mathLog[k];
     const label = i === 0 ? "오늘" : i === 1 ? "어제" : `${d.getMonth() + 1}/${d.getDate()}`;
     rows.push(`<tr><td>${label}</td><td>${r ? r.n : 0}</td><td>${r ? pct(r.ok, r.n) : "-"}</td>`
-      + `<td>${r ? (r.care || 0) : 0} / ${r ? (r.mission || 0) : 0}</td></tr>`);
+      + `<td>${r ? (r.care || 0) : 0} / ${r ? (r.mission || 0) : 0}</td>`
+      + `<td>${r && r.spell ? `${r.spellOk || 0} / ${r.spell}` : "-"}</td></tr>`);
   }
-  $("keyDays").innerHTML = `<table class="key-table"><tr><th>날짜</th><th>푼 문제</th><th>정답률</th><th>돌봄 / 미션</th></tr>${rows.join("")}</table>`;
+  $("keyDays").innerHTML = `<table class="key-table"><tr><th>날짜</th><th>푼 문제</th><th>정답률</th><th>돌봄 / 미션</th><th>영어 단어</th></tr>${rows.join("")}</table>`
+    + (state.spellWrong.length ? `<p class="key-hint">📒 다시 나올 영어 단어: ${state.spellWrong.join(", ")}</p>` : "");
 
   const types = (MATH_TYPES[state.mathGrade] || []).map((t) => {
     const s = state.mathSkill[t.id];

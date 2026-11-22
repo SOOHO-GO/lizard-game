@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.16.0">
+<link rel="stylesheet" href="style.css?v=0.17.0">
 </head>
 <body>
 <main id="app">
@@ -283,7 +283,7 @@
     <button id="testShedNow">✨ 바로 허물 벗기</button>
   </section>
 
-  <!-- 돌봄 문제: 밥·놀이·청소·물·분무 전에 수학 한 문제 -->
+  <!-- 돌봄 문제: 밥 주기 전에 곱셈 한 문제 -->
   <div id="cqPanel" class="m-panel" hidden>
     <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="cqTitle">
       <button id="cqClose" class="m-close" aria-label="닫기">✕</button>
@@ -298,6 +298,20 @@
         <button data-cq="7">7</button><button data-cq="8">8</button><button data-cq="9">9</button>
         <button data-cq="del" aria-label="지우기">⌫</button><button data-cq="0">0</button><button data-cq="ok" class="m-ok">확인</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 영어 받아쓰기: 놀이·청소·물·분무 전에 단어 하나 -->
+  <div id="spPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="spTitle">
+      <button id="spClose" class="m-close" aria-label="닫기">✕</button>
+      <h2 id="spTitle"></h2>
+      <div id="spHint"><span id="spPic"></span><span id="spKo"></span><span id="spLen"></span></div>
+      <div id="spLives"></div>
+      <div id="spTries"></div>
+      <div id="spA" lang="en"></div>
+      <div id="spFeedback"></div>
+      <div id="spKeys" lang="en"></div>
     </div>
   </div>
 
@@ -319,8 +333,8 @@
         <div id="keyTypes"></div>
         <div id="keyWrong"></div>
         <h3>⚙️ 설정</h3>
-        <label class="key-toggle"><input type="checkbox" id="keyCareQuiz"> 돌봄할 때 수학 문제 내기
-          <small>밥주기 · 놀아주기 · 청소 · 물 갈기 · 분무 전에 한 문제</small></label>
+        <label class="key-toggle"><input type="checkbox" id="keyCareQuiz"> 돌봄할 때 문제 내기
+          <small>밥주기 전엔 곱셈 · 놀아주기 · 청소 · 물 갈기 · 분무 전엔 영어 받아쓰기</small></label>
         <h3>⏩ 성장 단계 건너뛰기</h3>
         <div id="keyStages"></div>
         <button id="keyDone" class="m-big">닫기</button>
@@ -328,9 +342,9 @@
     </div>
   </div>
 
-  <footer><button id="keyBtn" aria-label="황금 열쇠"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M11.5 12H22M18 12v4M21 12v3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small style="opacity:.5">v0.16.0</small></footer>
+  <footer><button id="keyBtn" aria-label="황금 열쇠"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M11.5 12H22M18 12v4M21 12v3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small style="opacity:.5">v0.17.0</small></footer>
 </main>
-<script src="game.js?v=0.16.0"></script>
+<script src="game.js?v=0.17.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

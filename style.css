@@ -511,6 +511,32 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
 #cqPanel { z-index: 55; }
 #cqPanel h2 { font-size: 1.2rem; }
 
+/* ---- 영어 받아쓰기 창 ---- */
+#spPanel { z-index: 55; }
+#spPanel h2 { font-size: 1.2rem; }
+#spHint { display: flex; align-items: center; justify-content: center; gap: 10px; }
+#spPic { font-size: 2.6rem; line-height: 1.2; }
+#spKo { font-size: 1.1rem; font-weight: bold; color: #5531c9; }
+#spLen { padding: 2px 8px; border-radius: 999px; background: #efe9fc; color: #5531c9; font-size: .8rem; }
+#spLives { font-size: .95rem; margin: 2px 0; }
+#spTries { font-size: 1.3rem; font-weight: bold; letter-spacing: 3px; color: #888; line-height: 1.35; }
+#spTries .sp-bad, #spTries .sp-miss { color: #e53935; }
+#spA { margin: 6px auto 4px; width: 75%; min-height: 1.3em; padding: 6px; border-radius: 14px; font-size: 2rem; font-weight: bold;
+  letter-spacing: 4px; color: #5531c9; background: #fff; box-shadow: inset 0 3px 6px #0002, 0 1px 0 #fff; }
+#spA .sp-ok { color: #2e7d32; }
+#spFeedback { min-height: 1.6em; font-weight: bold; white-space: pre-line; }
+#spFeedback.ok { color: #2e7d32; }
+#spFeedback.no { color: #d84315; }
+#spKeys { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+#spKeys > div { display: flex; justify-content: center; gap: 4px; }
+#spKeys button { flex: 0 1 9%; min-width: 0; padding: 11px 0; border: 0; border-radius: 10px; font-size: 1.25rem; font-weight: bold;
+  color: var(--ink); cursor: pointer; touch-action: manipulation; user-select: none;
+  background: linear-gradient(#fff, #eef0f4); box-shadow: inset 0 2px 0 #fff, 0 3px 0 #c9cdd6, 0 5px 6px #0001; }
+#spKeys button:active { transform: translateY(3px); box-shadow: inset 0 2px 0 #fff, 0 1px 0 #c9cdd6; }
+#spKeys .sp-ctrl button { flex: 1 1 0; font-size: 1.05rem; }
+#spKeys .sp-ctrl .m-ok { color: #fff; text-shadow: 0 2px 0 #0003;
+  background: linear-gradient(#a084f0, #7c4dff); box-shadow: inset 0 2px 0 #fff5, 0 4px 0 #5531c9; }
+
 /* ---- 황금 열쇠: 학습 기록 ---- */
 #keyPanel .m-card { max-width: 460px; text-align: left; }
 #keyPanel h2, #keyLock { text-align: center; }
