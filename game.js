@@ -338,22 +338,123 @@ function growth() {
   return Math.min(100, ((state.careMin - from) / (next.care - from)) * 100);
 }
 
+// ---- 말풍선 대사 (v0.30.0) ----
+// 상황마다 여러 줄 중 하나를 고른다. 화면은 5초마다 다시 그리니까 한 번 고른 말은
+// TALK_HOLD_MS 동안 그대로 두고, 다음에는 방금 한 말과 다른 말을 고른다.
+const TALK_HOLD_MS = 15000;
+const talkPick = {};
+function pickLine(key, lines) {
+  const now = Date.now(), c = talkPick[key];
+  if (c && now - c.at < TALK_HOLD_MS && lines.includes(c.text)) return c.text;
+  let text = lines[Math.floor(Math.random() * lines.length)];
+  if (c && lines.length > 1) for (let i = 0; i < 5 && text === c.text; i++) text = lines[Math.floor(Math.random() * lines.length)];
+  talkPick[key] = { text, at: now };
+  return text;
+}
+const TALK = {
+  sleep: ["쿨쿨...", "zzz... 밀웜 꿈 꾸는 중...", "음냐음냐... 귀뚜라미...", "새근새근...", "쿨... 내일 또 놀아요...", "zzZ... (꼬리가 살랑)"],
+  sleepHot: ["더워서 잠이 안 와요...", "뒤척뒤척... 너무 더워요", "램프 끄면 잘 잘 수 있을 것 같아요..."],
+  cold: ["추워요... 램프를 켜주세요", "덜덜덜... 몸이 굳었어요 🥶", "파충류는 따뜻해야 움직일 수 있어요! 램프 켜 줘요",
+    "으슬으슬... 따뜻한 데 가고 싶어요", "추워서 밥도 소화가 안 돼요..."],
+  hot: ["더워요! 램프를 꺼주세요", "헥헥... 너무 뜨거워요 🥵", "선풍기 켜 주면 시원할 것 같아요!", "그늘에 숨고 싶어요...", "몸이 익을 것 같아요!"],
+  thirsty: ["목말라요... 물을 갈아주세요", "물그릇이 비었어요 💧", "꿀꺽 마시고 싶어요...", "혀가 바싹바싹 말라요..."],
+  humid: ["너무 축축해요... 램프로 말려 주세요", "축축해서 발가락이 쭈글쭈글해요...", "습도가 너무 높아요! 조금 말려 줘요"],
+  shedDry: ["허물 벗을 때예요! 💦 분무해 주세요", "몸이 간질간질... 촉촉하게 해 주세요", "허물이 꽉 끼었어요! 분무해 줘요 💦", "하얗게 됐죠? 곧 허물 벗어요!"],
+  shedWet: ["촉촉해서 허물이 들뜨고 있어요...", "곧 새 옷으로 갈아입어요!", "허물이 슬슬 벗겨지려 해요...", "두근두근, 곧 반짝반짝해질 거예요"],
+  hungry: ["배고파요...", "꼬르륵... 귀뚜라미 먹고 싶어요 🦗", "밀웜 생각만 나요...", "배에서 꼬르륵 소리가 나요", "밥 주면 곱셈 문제 열심히 풀게요!"],
+  dirty: ["사육장이 더러워요...", "냄새나요... 청소해 줘요 🧹", "바닥이 지저분해요...", "깨끗한 집에서 살고 싶어요!"],
+  sleepy: ["졸려요...", "하암~ 눈이 감겨요", "재워 주면 푹 잘게요 🌙", "꾸벅... 꾸벅..."],
+  bored: ["심심해요", "같이 놀아요! ⚽", "심심해서 꼬리만 흔들고 있어요...", "짝 맞추기 하고 싶어요! 🃏", "숨바꼭질 할래요? 🙈"],
+  poop: ["응가했어요! 치워주세요", "앗, 실수... 응가 치워 줘요 💩", "응가 했어요! 부끄러워요 🙈", "냄새나기 전에 치워 줄래요?"],
+  ok: ["괜찮아요", "그럭저럭 좋아요", "음~ 나쁘지 않아요", "조금만 더 챙겨 주면 최고일 것 같아요", "오늘은 보통이에요"],
+  happy: ["너무 좋아요!", "기분 최고예요! 🦎", "행복해요 💛", "오늘 최고의 하루예요!", "룰루랄라~ 🎵", "꼬리가 저절로 살랑살랑~",
+    "여기가 세상에서 제일 좋아요", "고마워요! 잘 돌봐 줘서", "히히, 신나요!"],
+  // 게코 상식 (기분이 좋을 때 가끔)
+  fact: [
+    "레오파드 게코는 눈꺼풀이 있어서 눈을 깜빡일 수 있어요 😉",
+    "게코는 혀로 눈을 닦아요 👅",
+    "통통한 꼬리에 영양분을 저장해요. 꼬리가 통통하면 건강한 거예요!",
+    "원래 파키스탄·인도 쪽 메마른 땅에 살았어요 🏜️",
+    "밤과 새벽에 더 활발해요. 야행성이에요 🌙",
+    "응가는 한쪽 구석에만 하는 깔끔쟁이예요",
+    "벗은 허물을 먹어서 영양을 다시 챙겨요",
+    "놀라면 꼬리를 끊고 도망갈 수 있어요. 그러니 꼬리는 잡지 말아요!",
+    "발바닥이 끈끈하지 않아서 벽은 못 타요",
+    "귀 구멍으로 안쪽이 살짝 보여요! 신기하죠?",
+    "잘 키우면 15~20년도 살 수 있어요",
+    "몸이 차가우면 소화를 못 해요. 그래서 램프가 꼭 필요해요 🔥",
+    "알을 어떤 온도로 품느냐에 따라 아들딸이 정해져요 🥚",
+    "새끼 때는 줄무늬였다가 크면서 점박이가 돼요",
+    "귀뚜라미에 칼슘 가루를 묻혀 먹으면 뼈가 튼튼해져요 🦴",
+  ],
+  tap: ["끽끽!", "간지러워요!", "안녕! 반가워요", "또 만져줘요!", "히히 😆", "꼬리는 살살 만져 줘요!", "손이 따뜻해요",
+    "뽀뽀~ 👅", "나랑 놀자!", "사랑해요 💛", "같이 있으니 좋아요", "깜짝이야!", "톡톡! 나도 톡!", "헤헤, 부끄러워요",
+    "오늘도 와 줘서 고마워요", "나 귀엽죠? 😎"],
+};
+
+// 시간·요일·계절·체크리스트·성장·코인 등 지금 상황에 맞는 혼잣말
+function situationLines() {
+  const out = [], now = new Date(), h = now.getHours(), mon = now.getMonth() + 1, day = now.getDay();
+  const weekend = day === 0 || day === 6;
+  const nm = state.name;
+  out.push(`나는 ${nm}! 오늘도 반가워요`);
+  if (h >= 5 && h < 9) out.push("좋은 아침이에요! ☀️", "아침 체크리스트 했어요? ✅", "일찍 일어났네요! 멋져요");
+  else if (h >= 9 && h < 13) out.push(weekend ? "주말 아침이다! 같이 놀아요 🎉" : "오전에도 열심히! 💪");
+  else if (h >= 13 && h < 18) out.push(weekend ? "주말 오후엔 놀이가 최고예요!" : "학교 잘 다녀왔어요? 🏫", "손 씻었어요? 🧼", "숙제 먼저 하고 놀아요!");
+  else if (h >= 18 && h < 21) out.push("저녁 먹었어요? 🍚", "공부 다 했는지 체크해 봐요 📚", "내가 쓴 물건은 제자리에! 🧸");
+  else out.push("곧 잘 시간이에요 🌙", "양치하고 자요! 🪥", "오늘 하루 수고했어요");
+  if (mon === 12 || mon <= 2) out.push("겨울이라 램프가 더 소중해요 ❄️");
+  else if (mon <= 5) out.push("봄이에요! 꽃 장식 놓아 줄래요? 🌸");
+  else if (mon <= 8) out.push("여름엔 너무 덥지 않게 해 줘요 🌞");
+  else out.push("가을이에요! 🍁 단풍잎 장식도 있대요");
+  if (window.checkReady) {
+    checkToday();
+    const n = checkCount(), s = streakNow();
+    if (state.checkDone) out.push("오늘 체크리스트 다 했네요! 최고 👍", "체크리스트 덕분에 쑥쑥 컸어요!");
+    else if (n > 0) out.push(`체크리스트 ${n}개 했어요! ${CHECK_IDS.length - n}개 남았어요`);
+    else out.push("오늘 체크리스트 같이 해 볼까요? ✅");
+    if (s >= 2) out.push(`🔥 체크리스트 ${s}일 연속! 내일도 해요`);
+  }
+  const st = stage().key;
+  if (st === "hatchling") out.push("나는 아기 게코예요! 쑥쑥 클게요", "아직 작지만 밥은 잘 먹어요!");
+  if (st === "juvenile") out.push("이제 어린 게코예요! 점박이가 생기고 있어요");
+  if (st === "adult") out.push("어른이 됐어요! 언젠가 알을 낳을 거예요 🥚");
+  if (growth() >= 70) out.push("곧 다음 단계로 자랄 것 같아요! 두근두근");
+  if (state.coins >= 30) out.push(`🪙 ${state.coins}개 모았어요! 상점 구경 갈래요?`);
+  if (state.decor.length >= 5) out.push("집이 예뻐서 너무 좋아요 🏡");
+  else if (!state.decor.length) out.push("🎨 꾸미기로 집을 예쁘게 해 줄래요?");
+  if (state.gen > 1 && state.history.length) out.push(`엄마 게코 ${state.history[state.history.length - 1].name}도 보고 싶어요`);
+  if (!mathToday()) out.push("오늘 수학 미션 했어요? ✏️");
+  if (tempZone() === "good") out.push(`온도가 딱 좋아요 ${Math.round(state.temp)}°C!`);
+  return out;
+}
+// 기분이 좋거나 괜찮을 때: 기본 대사 · 상황 대사 · 게코 상식을 섞어서
+function idleLine(face) {
+  let pool;
+  try {
+    const sit = situationLines();
+    pool = (face === "happy" ? TALK.happy : TALK.ok).concat(sit, sit, TALK.fact);
+  } catch (e) { pool = face === "happy" ? TALK.happy : TALK.ok; }
+  return pickLine("idle", pool);
+}
+
 function mood() {
-  const z = tempZone();
-  if (state.sleeping) return { face: "sleep", text: z === "hot" ? "더워서 잠이 안 와요..." : "쿨쿨..." };
-  if (z === "cold") return { face: "sad", text: "추워요... 램프를 켜주세요" };
-  if (z === "hot") return { face: "sad", text: "더워요! 램프를 꺼주세요" };
-  if (thirsty()) return { face: "sad", text: "목말라요... 물을 갈아주세요" };
-  if (state.humidity > TOO_HUMID) return { face: "sad", text: "너무 축축해요... 램프로 말려 주세요" };
-  if (state.shedPhase === "pre" && state.humidity < SHED_HUMID) return { face: "ok", text: "허물 벗을 때예요! 💦 분무해 주세요" };
-  if (state.shedPhase === "pre") return { face: "ok", text: "촉촉해서 허물이 들뜨고 있어요..." };
-  if (state.hunger < 25) return { face: "sad", text: "배고파요..." };
-  if (state.clean < 25) return { face: "sad", text: "사육장이 더러워요..." };
-  if (state.energy < 25) return { face: "sad", text: "졸려요..." };
-  if (state.happy < 25) return { face: "sad", text: "심심해요" };
-  if (state.poopCount) return { face: "ok", text: "응가했어요! 치워주세요" };
+  const z = tempZone(), t = (k) => pickLine(k, TALK[k]);
+  if (state.sleeping) return { face: "sleep", text: z === "hot" ? t("sleepHot") : t("sleep") };
+  if (z === "cold") return { face: "sad", text: t("cold") };
+  if (z === "hot") return { face: "sad", text: t("hot") };
+  if (thirsty()) return { face: "sad", text: t("thirsty") };
+  if (state.humidity > TOO_HUMID) return { face: "sad", text: t("humid") };
+  if (state.shedPhase === "pre" && state.humidity < SHED_HUMID) return { face: "ok", text: t("shedDry") };
+  if (state.shedPhase === "pre") return { face: "ok", text: t("shedWet") };
+  if (state.hunger < 25) return { face: "sad", text: t("hungry") };
+  if (state.clean < 25) return { face: "sad", text: t("dirty") };
+  if (state.energy < 25) return { face: "sad", text: t("sleepy") };
+  if (state.happy < 25) return { face: "sad", text: t("bored") };
+  if (state.poopCount) return { face: "ok", text: t("poop") };
   const avg = (state.hunger + state.happy + state.energy + state.clean) / 4;
-  return avg > 70 ? { face: "happy", text: "너무 좋아요!" } : { face: "ok", text: "괜찮아요" };
+  const face = avg > 70 ? "happy" : "ok";
+  return { face, text: idleLine(face) };
 }
 
 // ---- 그리기 ----
@@ -1076,7 +1177,6 @@ const CARE_BLOCK = {
 };
 
 // 게코를 톡 건드리면 "끽끽" 하고 반응한다. 머리를 길게 누르면 쓰다듬기 (아래 쓰다듬기 부분)
-const PET_TALK = ["끽끽!", "간지러워요!", "안녕! 반가워요", "또 만져줘요!"];
 let lastPetTap = 0;
 function tapPet() {
   const now = Date.now();
@@ -1086,7 +1186,10 @@ function tapPet() {
   if (state.sleeping) return say("쿨쿨... (깨우지 말아요)");
   sfx("chirp");
   state.happy = clamp(state.happy + 2);
-  say(PET_TALK[Math.floor(Math.random() * PET_TALK.length)]);
+  const tapLines = TALK.tap.concat(state.hunger < 40 ? ["배고파요... 밥 줄래요? 🍎"] : [],
+    state.happy > 80 ? [`${state.name}${josa(state.name, "은", "는")} 지금 행복해요!`] : []);
+  if (talkPick.tap) talkPick.tap.at = 0; // 만질 때마다 새로 고른다 (방금 한 말은 피해서)
+  say(pickLine("tap", tapLines));
   if (Math.random() < 0.5) setTimeout(flickTongue, 250);
 }
 
