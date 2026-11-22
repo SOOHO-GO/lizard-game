@@ -213,10 +213,11 @@ const badTemp = () => { const z = tempZone(); return z === "cold" || z === "hot"
 const thirsty = () => stage().key !== "egg" && state.water < THIRSTY;
 // v0.22.0: 학교 가 있는 시간(8:30~13:00)과 자는 시간(22:00~7:00)에는 돌봐 줄 수 없으니
 // 에너지·온도·물 상태와 상관없이 계속 자란다. [시작, 끝] 분 단위 (하루 0~1440분)
-const AWAY_HOURS = [[8 * 60 + 30, 13 * 60], [22 * 60, 24 * 60], [0, 7 * 60]];
+// v0.23.0: 학교 시간(weekday)은 평일(월~금)에만
+const AWAY_HOURS = [[8 * 60 + 30, 13 * 60, "weekday"], [22 * 60, 24 * 60], [0, 7 * 60]];
 const awayTime = (t = Date.now()) => {
-  const d = new Date(t), m = d.getHours() * 60 + d.getMinutes();
-  return AWAY_HOURS.some(([a, b]) => m >= a && m < b);
+  const d = new Date(t), m = d.getHours() * 60 + d.getMinutes(), weekday = d.getDay() >= 1 && d.getDay() <= 5;
+  return AWAY_HOURS.some(([a, b, only]) => m >= a && m < b && (only !== "weekday" || weekday));
 };
 const isCared = (t) => awayTime(t) || (!badTemp() && (stage().key === "egg" || (!thirsty() && careAvg() >= CARE_AVG)));
 
