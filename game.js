@@ -211,18 +211,27 @@ function tempZone() {
 const badTemp = () => { const z = tempZone(); return z === "cold" || z === "hot"; };
 // 알도 따뜻해야 부화한다 (실제로도 알은 28~32°C에서 키운다)
 const thirsty = () => stage().key !== "egg" && state.water < THIRSTY;
-const isCared = () => !badTemp() && (stage().key === "egg" || (!thirsty() && careAvg() >= CARE_AVG));
+// v0.22.0: 학교 가 있는 시간(8:30~13:00)과 자는 시간(22:00~7:00)에는 돌봐 줄 수 없으니
+// 에너지·온도·물 상태와 상관없이 계속 자란다. [시작, 끝] 분 단위 (하루 0~1440분)
+const AWAY_HOURS = [[8 * 60 + 30, 13 * 60], [22 * 60, 24 * 60], [0, 7 * 60]];
+const awayTime = (t = Date.now()) => {
+  const d = new Date(t), m = d.getHours() * 60 + d.getMinutes();
+  return AWAY_HOURS.some(([a, b]) => m >= a && m < b);
+};
+const isCared = (t) => awayTime(t) || (!badTemp() && (stage().key === "egg" || (!thirsty() && careAvg() >= CARE_AVG)));
 
 // 경과 시간(분)만큼 상태를 진행. 아이용이라 아무리 방치해도 죽지 않는다.
-function advance(total, offline) {
-  for (let left = total; left > 0; left -= STEP_MIN) step(Math.min(left, STEP_MIN), offline ? OFFLINE_FACTOR : 1);
+// start: 진행을 시작하는 시각(ms). 5분 조각마다 그때가 비우는 시간인지 확인한다
+function advance(total, offline, start) {
+  for (let left = total, t = start; left > 0; left -= STEP_MIN, t += STEP_MIN * 60000)
+    step(Math.min(left, STEP_MIN), offline ? OFFLINE_FACTOR : 1, t);
 }
 
 // f: 감소 속도 배율 (꺼 둔 동안은 느리게). 잘 때 에너지 회복은 그대로 둔다.
-function step(min, f) {
+function step(min, f, t) {
   const r = state.sleeping ? SLEEP : DECAY;
   const e = TEMP_EFFECT[tempZone()] || NO_EFFECT;
-  if (isCared()) state.careMin += min * TEST_SPEED;
+  if (isCared(t)) state.careMin += min * TEST_SPEED;
   // 상점 업그레이드: 좋은 은신처는 덜 심심하고 푹 자고, 좋은 바닥재는 먼지가 덜 난다
   const up = { hunger: upFx("bowl", "hunger"), happy: upFx("hide", "happy"), energy: upFx("bed", "energy"), clean: upFx("floor", "dust") };
   for (const k of ["hunger", "happy", "energy", "clean"]) {
@@ -265,7 +274,7 @@ function tick() {
   const before = stage(), hadPoop = state.poopCount, wasSleeping = state.sleeping;
   const online = gap <= OFFLINE_GAP_MIN;
   state.last = now;
-  if (min > 0) advance(min, !online);
+  if (min > 0) advance(min, !online, now - min * 60000);
   pickMorph();
   if (state.careMin >= LAY_GOAL.care && !busy) return layEgg();
   // 꺼 둔 사이에 허물 벗을 준비가 끝났으면, 그 사이에 벗고 먹은 것으로 친다
@@ -425,7 +434,9 @@ function render() {
   $("s-grow").value = growth();
   const z = tempZone();
   const adult = !STAGES[STAGES.indexOf(st) + 1];
-  $("growLabel").textContent = z === "cold" ? (st.key === "egg" ? "알이 추워요! 램프를 켜주세요" : "너무 추워서 못 자라요")
+  // 학교·잠자는 시간에는 상태와 상관없이 저절로 자란다 (AWAY_HOURS)
+  $("growLabel").textContent = awayTime() ? (adult ? "알 낳을 준비 중 🥚 (저절로 자라는 시간)" : "저절로 쑥쑥 자라는 시간 🌙")
+    : z === "cold" ? (st.key === "egg" ? "알이 추워요! 램프를 켜주세요" : "너무 추워서 못 자라요")
     : z === "hot" ? (st.key === "egg" ? "알이 너무 뜨거워요!" : "너무 더워서 못 자라요")
     : st.key === "egg" ? "알이 따뜻해지는 중"
     : thirsty() ? "목말라서 못 자라요"
