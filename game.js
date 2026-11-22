@@ -98,6 +98,23 @@ const UPGRADES = [
     { name: "부드러운 흙", price: 35, desc: "사육장이 덜 더러워져요" },
     { name: "숲속 이끼 흙", price: 90, desc: "사육장이 훨씬 덜 더러워져요" },
   ] },
+  // v0.21.0: 새 업그레이드 (bowl.hunger: 배고파지는 속도, bed.energy: 깨어 있을 때 졸려지는 속도,
+  //          fog.humid: 습도가 내려가는 속도)
+  { id: "bowl", icon: "🍽️", name: "먹이 그릇", fx: { hunger: [1, 0.85, 0.7] }, levels: [
+    { name: "작은 접시" },
+    { name: "벌레 탈출 방지 그릇", price: 45, desc: "배가 덜 빨리 고파요" },
+    { name: "자동 먹이 상자", price: 110, desc: "배가 훨씬 천천히 고파요" },
+  ] },
+  { id: "bed", icon: "🛏️", name: "잠자리", fx: { energy: [1, 0.85, 0.7] }, levels: [
+    { name: "맨바닥" },
+    { name: "보들보들 해먹", price: 50, desc: "덜 졸려요" },
+    { name: "따뜻한 온열 매트", price: 120, desc: "훨씬 덜 졸려요" },
+  ] },
+  { id: "fog", icon: "🌫️", name: "가습기", fx: { humid: [1, 0.7, 0.45] }, levels: [
+    { name: "없음" },
+    { name: "작은 분무기", price: 40, desc: "촉촉함이 더 오래가요 · 허물 벗기가 쉬워요" },
+    { name: "안개 폭포", price: 100, desc: "촉촉함이 아주 오래가요" },
+  ] },
 ];
 const upDef = (id) => UPGRADES.find((u) => u.id === id);
 const upLv = (id) => Math.max(1, Math.min(3, Math.floor(state.upgrades[id]) || 1));
@@ -207,7 +224,7 @@ function step(min, f) {
   const e = TEMP_EFFECT[tempZone()] || NO_EFFECT;
   if (isCared()) state.careMin += min * TEST_SPEED;
   // 상점 업그레이드: 좋은 은신처는 덜 심심하고 푹 자고, 좋은 바닥재는 먼지가 덜 난다
-  const up = { hunger: 1, happy: upFx("hide", "happy"), energy: 1, clean: upFx("floor", "dust") };
+  const up = { hunger: upFx("bowl", "hunger"), happy: upFx("hide", "happy"), energy: upFx("bed", "energy"), clean: upFx("floor", "dust") };
   for (const k of ["hunger", "happy", "energy", "clean"]) {
     state[k] = clamp(state[k] - (r[k] > 0 ? r[k] * f * e[k] * up[k] : r[k] * e.rest * upFx("hide", "rest")) * min);
   }
@@ -222,7 +239,7 @@ function step(min, f) {
   }
   state.clean = clamp(state.clean - POOP_DIRT * upFx("floor", "poop") * state.poopCount * f * min);
   const dry = state.lampOn ? HUMID_DRY.lampOn : HUMID_DRY.lampOff;
-  state.humidity = clamp(state.humidity + (dry - state.humidity) * (1 - Math.exp(-HUMID_RATE * min)));
+  state.humidity = clamp(state.humidity + (dry - state.humidity) * (1 - Math.exp(-HUMID_RATE * upFx("fog", "humid") * min)));
   stepShed(min);
 }
 
@@ -700,6 +717,7 @@ function giveFood(kind) {
     state.hunger = clamp(state.hunger + f.hunger);
     state.happy = clamp(state.happy + f.happy);
     addDigest(1);
+    bump("feed");
     busy = false;
     setAction("eat", 1500);
     sfx("eat");
@@ -905,6 +923,7 @@ const ACTIONS = {
   water() { changeWater(); },
   mist() {
     sfx("mist");
+    bump("mist");
     state.humidity = clamp(state.humidity + MIST_UP);
     for (let i = 0; i < 7; i++) {
       const s = spawn("spray-fx", "💧", 15 + Math.random() * 70, 18 + Math.random() * 20);
@@ -1646,6 +1665,7 @@ function checkSpell() {
   if (ok) {
     cur.locked = true;
     logSpell(true);
+    bump("spell");
     if (!cur.tries.length) state.spellWrong = state.spellWrong.filter((x) => x !== word); // 한 번에 맞히면 졸업
     save();
     sfx("catch");
@@ -2624,11 +2644,37 @@ const DECOR = [
   { id: "moai", icon: "🗿", name: "석상", size: 16, how: "숨바꼭질 3번 모두 찾기", goal: () => [stat("hidePerfect"), 1] },
   { id: "castle", icon: "🏰", name: "성", size: 22, how: "어른 게코로 자라기", ok: () => stageNo() >= 3 },
   { id: "crown", icon: "👑", name: "왕관", size: 9, how: "2대 게코 키우기", ok: () => state.gen >= 2 },
+  // v0.21.0: 더 얻을 수 있는 장식
+  { id: "clover", icon: "🍀", name: "네잎클로버", size: 9, how: "밥 주기 20번", goal: () => [stat("feed"), 20] },
+  { id: "sunflower", icon: "🌻", name: "해바라기", size: 16, how: "영어 단어 10개 맞히기", goal: () => [stat("spell"), 10] },
+  { id: "books", icon: "📚", name: "책 더미", size: 13, how: "영어 단어 50개 맞히기", goal: () => [stat("spell"), 50] },
+  { id: "potted", icon: "🪴", name: "화분", size: 14, how: "수학 미션 통과 5번", goal: () => [stat("mathPass"), 5] },
+  { id: "trophy", icon: "🏆", name: "트로피", size: 12, how: "수학 미션 통과 20번", goal: () => [stat("mathPass"), 20] },
+  { id: "fountain", icon: "⛲", name: "분수", size: 20, how: "분무하기 15번", goal: () => [stat("mist"), 15] },
+  { id: "coral", icon: "🪸", name: "산호", size: 13, how: "물 갈아주기 30번", goal: () => [stat("water"), 30] },
+  { id: "lantern", icon: "🏮", name: "등불", size: 11, how: "응가 치우기 50번", goal: () => [stat("poop"), 50] },
+  { id: "dino", icon: "🦕", name: "공룡 모형", size: 20, how: "허물 벗기 3번", goal: () => [stat("shed"), 3] },
+  { id: "pumpkin", icon: "🎃", name: "호박", size: 13, how: "사냥 놀이 완벽 5번", goal: () => [stat("huntPerfect"), 5] },
+  { id: "orb", icon: "🔮", name: "수정 구슬", size: 10, how: "숨바꼭질 완벽 5번", goal: () => [stat("hidePerfect"), 5] },
+  { id: "star", icon: "🌟", name: "반짝 별", size: 10, how: "오답 노트 졸업 20개", goal: () => [stat("grads"), 20] },
+  { id: "palace", icon: "🏯", name: "궁전", size: 24, how: "3대 게코 키우기", ok: () => state.gen >= 3 },
   // 상점에서 코인으로 사는 장식 (price). svg가 있으면 이모지 대신 그림을 쓴다
   { id: "tuft", icon: "🌾", name: "풀숲", size: 13, price: 15 },
   { id: "tree", icon: "🌳", name: "장식 나무", size: 24, price: 30 },
   { id: "ruby", icon: "", svg: "ruby", name: "루비", size: 10, price: 45 },
   { id: "dragon", icon: "", svg: "dragon", name: "아기 드래곤 모형", size: 17, price: 70 },
+  { id: "tulip", icon: "🌷", name: "튤립", size: 11, price: 10 },
+  { id: "balloon", icon: "🎈", name: "풍선", size: 12, price: 15 },
+  { id: "maple", icon: "🍁", name: "단풍잎", size: 9, price: 20 },
+  { id: "teddy", icon: "🧸", name: "곰 인형", size: 14, price: 25 },
+  { id: "tent", icon: "⛺", name: "텐트", size: 20, price: 35 },
+  { id: "bamboo", icon: "🎋", name: "대나무", size: 20, price: 40 },
+  { id: "volcano", icon: "🌋", name: "화산", size: 22, price: 55 },
+  { id: "carousel", icon: "🎠", name: "회전목마", size: 20, price: 65 },
+  { id: "ufo", icon: "🛸", name: "UFO", size: 18, price: 80 },
+  { id: "rocket", icon: "🚀", name: "로켓", size: 18, price: 90 },
+  { id: "wheel", icon: "🎡", name: "관람차", size: 24, price: 110 },
+  { id: "unicorn", icon: "🦄", name: "유니콘 인형", size: 16, price: 130 },
 ];
 // 장식 그림 (그라디언트는 쓰지 않는다: 같은 id가 여러 번 나오면 숨겨진 쪽을 가리켜 안 보일 수 있다)
 const DECOR_SVG = {
@@ -2677,7 +2723,7 @@ const DECOR_SVG = {
   </svg>`,
 };
 const decorIcon = (d) => (d.svg ? DECOR_SVG[d.svg] : d.icon);
-const MAX_DECOR = 12, DECOR_SCALE = [0.6, 1.8];
+const MAX_DECOR = 20, DECOR_SCALE = [0.6, 1.8];
 const decorDef = (id) => DECOR.find((d) => d.id === id);
 function decorReady(d) {
   if (d.price) return false; // 상점 장식은 사야만 생긴다
@@ -2891,7 +2937,7 @@ $("room").addEventListener("pointerdown", (e) => {
 });
 
 // ================= 상점 =================
-// 놀아주기로 모은 코인으로 은신처·물그릇·바닥재를 업그레이드하고 장식을 산다.
+// 놀아주기로 모은 코인으로 은신처·물그릇·바닥재·먹이 그릇·잠자리·가습기를 업그레이드하고 장식을 산다.
 // 업그레이드 단계는 #room의 data-hide / data-dish / data-floor로 그림에 반영된다 (style.css)
 function renderUpgrades() {
   const room = $("room");
