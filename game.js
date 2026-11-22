@@ -120,7 +120,7 @@ const upDef = (id) => UPGRADES.find((u) => u.id === id);
 const upLv = (id) => Math.max(1, Math.min(3, Math.floor(state.upgrades[id]) || 1));
 const upFx = (id, k) => upDef(id).fx[k][upLv(id) - 1];
 // 놀이 코인: 벌레 1마리 1개, 사냥 1마리 3개, 숨바꼭질 1번 찾기 3개, 놀이를 완벽하게 하면 보너스
-const COIN = { bug: 1, hunt: 3, hide: 3, perfect: 3 };
+const COIN = { bug: 1, hunt: 3, hide: 3, match: 1, perfect: 3 };
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -2488,6 +2488,7 @@ function choosePlay(kind) {
   if (kind === "bugs") startBugGame();
   else if (kind === "hunt") startHunt();
   else if (kind === "hide") startHide();
+  else if (kind === "match") startMatch();
 }
 document.querySelectorAll("[data-play]").forEach((b) => b.addEventListener("click", () => choosePlay(b.dataset.play)));
 
@@ -2765,6 +2766,85 @@ function endHide() {
   wander();
 }
 
+// ---- 짝 맞추기 (v0.27.0, 사냥 놀이 대신): 카드 12장을 두 장씩 뒤집어 같은 그림 6쌍을 찾는다 ----
+// 적게 뒤집을수록 코인을 더 준다 (쌍마다 1개 + 10번 안에 끝내면 보너스 6, 14번 안이면 3)
+const MATCH_PICS = ["🦗", "🐛", "🪨", "🌵", "🍄", "💧", "🪵", "🌺", "🦴", "🥚", "🌙", "⭐"];
+const MATCH_PAIRS = 6, MATCH_PERFECT = 10, MATCH_GOOD = 14;
+let match = null; // { cards: [그림...], open: [i, j], done: Set, moves, lock }
+
+function startMatch() {
+  busy = true;
+  stopWalk();
+  const pics = shuffle(MATCH_PICS.slice()).slice(0, MATCH_PAIRS);
+  match = { cards: shuffle(pics.concat(pics)), open: [], done: new Set(), moves: 0, lock: false };
+  renderMatch();
+  $("matchMsg").textContent = "같은 그림 두 장을 찾아요!";
+  $("matchPanel").hidden = false;
+  sfx("start");
+}
+function renderMatch() {
+  const m = match, box = $("matchGrid");
+  box.innerHTML = "";
+  m.cards.forEach((pic, i) => {
+    const up = m.open.includes(i) || m.done.has(i);
+    const b = document.createElement("button");
+    b.className = "mcard" + (up ? " up" : "") + (m.done.has(i) ? " done" : "");
+    b.textContent = up ? pic : "🦎";
+    b.addEventListener("click", () => flipCard(i));
+    box.appendChild(b);
+  });
+  $("matchMoves").textContent = `뒤집은 횟수 ${m.moves} · 찾은 짝 ${m.done.size / 2} / ${MATCH_PAIRS}`;
+}
+function flipCard(i) {
+  const m = match;
+  if (!m || m.lock || m.open.includes(i) || m.done.has(i)) return;
+  m.open.push(i);
+  sfx("tap");
+  if (m.open.length < 2) return renderMatch();
+  m.moves++;
+  const [a, b] = m.open;
+  if (m.cards[a] === m.cards[b]) {
+    m.done.add(a); m.done.add(b);
+    m.open = [];
+    sfx("catch");
+    $("matchMsg").textContent = "짝 찾았다! 🎉";
+    renderMatch();
+    if (m.done.size === m.cards.length) { m.lock = true; setTimeout(() => endMatch(true), 700); }
+    return;
+  }
+  m.lock = true;
+  $("matchMsg").textContent = "아쉬워요! 그림을 잘 기억해 둬요";
+  renderMatch();
+  setTimeout(() => {
+    if (match !== m) return;
+    m.open = [];
+    m.lock = false;
+    renderMatch();
+  }, 900);
+}
+function endMatch(finished) {
+  const m = match;
+  match = null;
+  $("matchPanel").hidden = true;
+  tick();
+  const pairs = m.done.size / 2;
+  state.happy = clamp(state.happy + 6 + pairs * 2);
+  state.energy = clamp(state.energy - 5);
+  let got = 0;
+  if (finished) {
+    bump("matchPlay");
+    if (m.moves <= MATCH_PERFECT) bump("matchPerfect");
+    got = earnCoins(pairs * COIN.match + (m.moves <= MATCH_PERFECT ? 6 : m.moves <= MATCH_GOOD ? 3 : 0));
+  }
+  busy = false;
+  sfx(finished ? "yay" : "tap");
+  say(!finished ? "다음에 또 같이 해요!"
+    : (m.moves <= MATCH_PERFECT ? `${m.moves}번 만에 다 찾았어요! 기억력 최고 🧠` : `${m.moves}번 만에 다 찾았어요!`)
+      + (got ? ` 🪙 +${got}` : ""));
+  wander();
+}
+$("matchClose").addEventListener("click", () => { if (match) endMatch(false); });
+
 // ================= 사육장 꾸미기 =================
 // 장식은 돌보기·수학·놀이를 하면서 하나씩 열린다. size: 사육장 너비에 대한 크기(%)
 // how: 얻는 방법, ok: 열리는 조건, goal: [지금, 목표] (진행 막대를 보여 준다)
@@ -2782,7 +2862,7 @@ const DECOR = [
     ok: () => Object.values(state.mathSkill).some((s) => s && s.lvl >= 3) },
   { id: "amphora", icon: "🏺", name: "항아리", size: 15, how: "허물 벗기 1번", goal: () => [stat("shed"), 1] },
   { id: "crystal", icon: "💎", name: "수정", size: 10, how: "오답 노트 졸업 5개", goal: () => [stat("grads"), 5] },
-  { id: "palm", icon: "🌴", name: "야자나무", size: 22, how: "사냥 놀이 3마리 모두 잡기", goal: () => [stat("huntPerfect"), 1] },
+  { id: "palm", icon: "🌴", name: "야자나무", size: 22, how: "짝 맞추기 10번 안에 끝내기", goal: () => [stat("huntPerfect") + stat("matchPerfect"), 1] },
   { id: "moai", icon: "🗿", name: "석상", size: 16, how: "숨바꼭질 3번 모두 찾기", goal: () => [stat("hidePerfect"), 1] },
   { id: "castle", icon: "🏰", name: "성", size: 22, how: "어른 게코로 자라기", ok: () => stageNo() >= 3 },
   { id: "crown", icon: "👑", name: "왕관", size: 9, how: "2대 게코 키우기", ok: () => state.gen >= 2 },
@@ -2796,7 +2876,7 @@ const DECOR = [
   { id: "coral", icon: "🪸", name: "산호", size: 13, how: "물 갈아주기 30번", goal: () => [stat("water"), 30] },
   { id: "lantern", icon: "🏮", name: "등불", size: 11, how: "응가 치우기 50번", goal: () => [stat("poop"), 50] },
   { id: "dino", icon: "🦕", name: "공룡 모형", size: 20, how: "허물 벗기 3번", goal: () => [stat("shed"), 3] },
-  { id: "pumpkin", icon: "🎃", name: "호박", size: 13, how: "사냥 놀이 완벽 5번", goal: () => [stat("huntPerfect"), 5] },
+  { id: "pumpkin", icon: "🎃", name: "호박", size: 13, how: "짝 맞추기 5판 끝내기", goal: () => [stat("huntPerfect") + stat("matchPlay"), 5] },
   { id: "orb", icon: "🔮", name: "수정 구슬", size: 10, how: "숨바꼭질 완벽 5번", goal: () => [stat("hidePerfect"), 5] },
   { id: "star", icon: "🌟", name: "반짝 별", size: 10, how: "오답 노트 졸업 20개", goal: () => [stat("grads"), 20] },
   { id: "palace", icon: "🏯", name: "궁전", size: 24, how: "3대 게코 키우기", ok: () => state.gen >= 3 },

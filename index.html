@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
-<link rel="stylesheet" href="style.css?v=0.26.0">
+<link rel="stylesheet" href="style.css?v=0.27.0">
 </head>
 <body>
 <main id="app">
@@ -139,7 +139,7 @@
     <div id="dark" hidden>💤</div>
     <div id="playPicker" style="display:none">
       <button data-play="bugs">🦗 벌레 잡기</button>
-      <button data-play="hunt">🥢 사냥 놀이</button>
+      <button data-play="match">🃏 짝 맞추기</button>
       <button data-play="hide">🙈 숨바꼭질</button>
       <button data-play="" class="link">그만두기</button>
     </div>
@@ -187,6 +187,17 @@
       <p id="checkStreak"></p>
       <div id="checkList"></div>
       <button id="checkDone" class="m-big">확인</button>
+    </div>
+  </div>
+
+  <!-- 짝 맞추기 놀이 -->
+  <div id="matchPanel" class="m-panel" hidden>
+    <div class="m-card" role="dialog" aria-modal="true" aria-labelledby="matchTitle">
+      <button id="matchClose" class="m-close" aria-label="그만하기">✕</button>
+      <h2 id="matchTitle">🃏 짝 맞추기</h2>
+      <p id="matchMsg"></p>
+      <div id="matchGrid"></div>
+      <p id="matchMoves"></p>
     </div>
   </div>
 
@@ -356,9 +367,9 @@
     </div>
   </div>
 
-  <footer><button id="keyBtn" aria-label="황금 열쇠"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M11.5 12H22M18 12v4M21 12v3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small style="opacity:.5">v0.26.0</small></footer>
+  <footer><button id="keyBtn" aria-label="황금 열쇠"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M11.5 12H22M18 12v4M21 12v3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button><small style="opacity:.5">v0.27.0</small></footer>
 </main>
-<script src="game.js?v=0.26.0"></script>
+<script src="game.js?v=0.27.0"></script>
 <script>
   // 앱처럼 설치 + 인터넷 없이도 실행 (sw.js)
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
