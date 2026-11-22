@@ -599,3 +599,8 @@ footer { margin-top: 16px; display: flex; align-items: center; justify-content: 
 #room.night #hideZzz { display: inline; animation: hide-zzz 2.4s ease-in-out infinite; transform-box: fill-box; }
 @keyframes hide-zzz { 0% { transform: translate(0, 6px); opacity: .2; } 50% { opacity: 1; } 100% { transform: translate(8px, -10px); opacity: .2; } }
 #room.night #dark { display: none; }
+/* 동굴 입구로 빼꼼 보이는 얼굴: 게코가 쏙 들어간 뒤 천천히 나타나고, 숨 쉬듯 살짝 오르내린다 */
+#hidePeek { display: none; }
+#room.gecko-in #hidePeek { display: inline; animation: peek-in 1.2s ease-out .6s both, peek-breathe 5s ease-in-out 1.8s infinite; }
+@keyframes peek-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes peek-breathe { 50% { transform: translateY(.8px); } }

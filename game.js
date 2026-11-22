@@ -830,12 +830,14 @@ function wander() {
   // 깨면 은신처에서 나온다
   if (!state.sleeping || stage().key === "egg") {
     $("pet").classList.remove("inhide");
+    updatePeek();
     if (goingHide) { clearTimeout(hideTimer); goingHide = false; }
   }
   if (stage().key === "egg") {
     if (petX !== PET_CENTER_X) placeAt(PET_CENTER_X);
   } else if (state.sleeping) {
     if (!$("pet").classList.contains("inhide")) goIntoHide(); // 잘 때는 은신처 안으로 쏙
+    else updatePeek(); // 자는 그림이 늦게 바뀌어도 얼굴을 맞춘다
     pause = 4000;
   } else if (!busy && !action && tempZone() === "hot") {
     sec = walkTo(HIDE_X, 5); // 더우면 그늘진 은신처로 피한다
@@ -866,6 +868,22 @@ function sleepX() {
   const headOff = ((p.offsetWidth - size) / 2 + size * (1 - HIDE_HEAD_U / 100)) / rw * 100;
   return hideEntranceX() - headOff;
 }
+// v0.34.0: 동굴 안에서 자는 동안 입구로 얼굴이 빼꼼 보인다.
+// 자는 그림에서 머리 가운데(u)·머리 너비(w)·턱 높이(chin) (그림 기준 %). 머리 너비를 PEEK_HEAD로 맞춰 입구에 놓는다
+const PEEK = { hatchling: { u: 76, w: 29, chin: 64 }, juvenile: { u: 77, w: 27, chin: 47 }, adult: { u: 81, w: 23, chin: 68 } };
+const PEEK_HEAD = 32, PEEK_X = 71, PEEK_CHIN_Y = 78; // 동굴 그림(140×80) 안 좌표
+function updatePeek() {
+  const img = $("petImg"), peek = $("hidePeek"), p = PEEK[stage().key];
+  const show = $("pet").classList.contains("inhide") && p && img.style.display !== "none" && img.src;
+  $("room").classList.toggle("gecko-in", !!show);
+  if (!show) return;
+  const S = PEEK_HEAD / (p.w / 100);
+  if (peek.getAttribute("href") !== img.src) peek.setAttribute("href", img.src);
+  peek.setAttribute("width", S.toFixed(1));
+  peek.setAttribute("height", S.toFixed(1));
+  peek.setAttribute("x", (PEEK_X - p.u / 100 * S).toFixed(1));
+  peek.setAttribute("y", (PEEK_CHIN_Y - p.chin / 100 * S).toFixed(1));
+}
 let hideTimer, goingHide = false;
 function goIntoHide() {
   if (goingHide) return; // 이미 걸어가는 중
@@ -878,6 +896,7 @@ function goIntoHide() {
     facing = -1; // 입구를 보고
     pet.style.setProperty("--face", facing);
     pet.classList.add("inhide");
+    updatePeek();
   }, sec * 1000 + 300);
 }
 
