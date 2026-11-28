@@ -54,6 +54,23 @@ const MORPHS = [
   { key: "superhypo", name: "하이포" },
   { key: "galaxy", name: "갤럭시" },
   { key: "cocoa", name: "코코아" },
+  // v0.35.0: 16종 추가 (노멀 그림의 몸 색·무늬 색을 바꾼 그림)
+  { key: "mint", name: "민트" },
+  { key: "cherry", name: "체리" },
+  { key: "ocean", name: "오션 블루" },
+  { key: "peach", name: "피치" },
+  { key: "lemonfrost", name: "레몬 프로스트" },
+  { key: "raptor", name: "랩터" },
+  { key: "diablo", name: "디아블로 블랑" },
+  { key: "bandit", name: "밴딧" },
+  { key: "enigma", name: "에니그마" },
+  { key: "firewater", name: "파이어워터" },
+  { key: "aurora", name: "오로라" },
+  { key: "rose", name: "로즈 핑크" },
+  { key: "emerald", name: "에메랄드" },
+  { key: "ice", name: "아이스" },
+  { key: "lime", name: "라임" },
+  { key: "storm", name: "스톰" },
 ];
 const morphOf = (key) => MORPHS.find((m) => m.key === key) || MORPHS[0];
 const morphDir = (key) => IMG_DIR + (morphOf(key).key === "normal" ? "" : morphOf(key).key + "/");
@@ -134,6 +151,7 @@ function newState() {
            mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [], checkDay: "", checks: [], checkDone: false, checkStreak: 0, checkLast: "",
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
+           friendDay: "", friendCalled: [],
            gen: 1, history: [], morph: null, born: now, last: now };
 }
 
@@ -158,6 +176,9 @@ function fromSave(s) {
   // 상점이 없던 저장본
   if (typeof st.coins !== "number" || !(st.coins >= 0)) st.coins = 0;
   if (!st.upgrades || typeof st.upgrades !== "object" || Array.isArray(st.upgrades)) st.upgrades = {};
+  // 친구 부르기가 없던 저장본
+  if (!Array.isArray(st.friendCalled)) st.friendCalled = [];
+  if (typeof st.friendDay !== "string") st.friendDay = "";
   return st;
 }
 
@@ -274,6 +295,12 @@ function step(min, f, t) {
 function stepShed(min) {
   if (stage().key === "egg") return;
   const next = nextGoal();
+  // v0.35.0: 허물은 자랄 때만 벗는다. 어른은 허물 대신 알 낳을 준비를 한다
+  // (예전 저장본에서 어른이 탈피 중이었으면 원래대로 돌려놓는다)
+  if (next === LAY_GOAL) {
+    if (state.shedFor === LAY_GOAL.key && shedding()) state.shedPhase = "none";
+    return;
+  }
   if (state.shedPhase !== "pre" && state.shedPhase !== "ready" && state.shedFor !== next.key && growth() >= SHED_AT) {
     state.shedPhase = "pre";
     state.shedFor = next.key;
@@ -361,6 +388,11 @@ const TALK = {
   humid: ["너무 축축해요... 램프로 말려 주세요", "축축해서 발가락이 쭈글쭈글해요...", "습도가 너무 높아요! 조금 말려 줘요"],
   shedDry: ["허물 벗을 때예요! 💦 분무해 주세요", "몸이 간질간질... 촉촉하게 해 주세요", "허물이 꽉 끼었어요! 분무해 줘요 💦", "하얗게 됐죠? 곧 허물 벗어요!"],
   shedWet: ["촉촉해서 허물이 들뜨고 있어요...", "곧 새 옷으로 갈아입어요!", "허물이 슬슬 벗겨지려 해요...", "두근두근, 곧 반짝반짝해질 거예요"],
+  // 어른: 알 낳을 준비 (성장 막대 40% 이상 / 80% 이상)
+  gravid: ["엄마가 될 준비를 하고 있어요 🥚", "요즘 밥이 더 맛있어요! 아기한테 줄 영양이에요", "배가 조금 볼록해진 것 같아요",
+    "칼슘을 잘 먹어야 튼튼한 알을 낳아요 🦴", "아기 게코는 어떤 색일까요? 두근두근"],
+  gravidSoon: ["곧 알을 낳을 것 같아요! 🥚", "배가 볼록볼록해요! 아기가 기다려져요", "알 낳을 자리를 찾고 있어요... 두리번두리번",
+    "조금만 더 잘 돌봐 주면 알을 낳아요!", "우리 아기 이름은 뭐로 지어 줄 거예요? 💛"],
   hungry: ["배고파요...", "꼬르륵... 귀뚜라미 먹고 싶어요 🦗", "밀웜 생각만 나요...", "배에서 꼬르륵 소리가 나요", "밥 주면 곱셈 문제 열심히 풀게요!"],
   dirty: ["사육장이 더러워요...", "냄새나요... 청소해 줘요 🧹", "바닥이 지저분해요...", "깨끗한 집에서 살고 싶어요!"],
   sleepy: ["졸려요...", "하암~ 눈이 감겨요", "재워 주면 푹 잘게요 🌙", "꾸벅... 꾸벅..."],
@@ -418,8 +450,12 @@ function situationLines() {
   const st = stage().key;
   if (st === "hatchling") out.push("나는 아기 게코예요! 쑥쑥 클게요", "아직 작지만 밥은 잘 먹어요!");
   if (st === "juvenile") out.push("이제 어린 게코예요! 점박이가 생기고 있어요");
-  if (st === "adult") out.push("어른이 됐어요! 언젠가 알을 낳을 거예요 🥚");
-  if (growth() >= 70) out.push("곧 다음 단계로 자랄 것 같아요! 두근두근");
+  if (st === "adult") {
+    // v0.35.0: 어른은 더 자라지 않고 알 낳을 준비를 한다
+    if (growth() >= SHED_AT) out.push(...TALK.gravidSoon);
+    else if (growth() >= 40) out.push(...TALK.gravid);
+    else out.push("어른이 됐어요! 언젠가 알을 낳을 거예요 🥚", "다 컸어요! 이제 엄마가 될 준비를 해요");
+  } else if (growth() >= 70) out.push("곧 다음 단계로 자랄 것 같아요! 두근두근");
   if (state.coins >= 30) out.push(`🪙 ${state.coins}개 모았어요! 상점 구경 갈래요?`);
   if (state.decor.length >= 5) out.push("집이 예뻐서 너무 좋아요 🏡");
   else if (!state.decor.length) out.push("🎨 꾸미기로 집을 예쁘게 해 줄래요?");
@@ -1285,8 +1321,9 @@ let quiz = null, mathSay = "";
 // 학년별 문제 유형 (초등 교육과정 기준). fam이 같은 유형끼리는 묶어서 비율을 맞춘다
 // (2학년 구구단이 8개 유형이어도 덧셈·뺄셈·곱셈이 비슷하게 나오게).
 // v0.11.0: 아이 요청으로 2학년은 한 자리 곱셈(구구단)만 나온다
+// v0.35.0: 2학년 구구단은 3·4·6·7단만
 const MATH_TYPES = {
-  2: [2, 3, 4, 5, 6].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
+  2: [3, 4, 6, 7].map((n) => ({ id: "m" + n, fam: "×", name: `구구단 ${n}단` })),
   3: [
     { id: "add3", fam: "+", name: "세 자리 덧셈" },
     { id: "sub3", fam: "-", name: "세 자리 뺄셈" },
@@ -2098,6 +2135,7 @@ function layEgg() {
     lampOn: state.lampOn, fanOn: state.fanOn, temp: state.temp, water: state.water, humidity: state.humidity,
     stats: state.stats, decor: state.decor, decorGot: state.decorGot, decorSeen: state.decorSeen, // 꾸민 사육장은 그대로
     coins: state.coins, upgrades: state.upgrades, // 코인과 업그레이드한 사육장도 그대로
+    friendDay: state.friendDay, friendCalled: state.friendCalled, // 오늘 놀러 온 친구도 그대로
   };
   state = Object.assign(newState(), keep);
   save();
@@ -2152,8 +2190,10 @@ function dexFound() {
   return found;
 }
 
+const DEX_HINT = "알에서 어떤 게코가 나올지 몰라요! 만난 게코는 도감에 기록돼요. 예전에 키운 게코는 🎈 놀러 오라고 부를 수 있어요.";
 function renderDex() {
   const found = dexFound(), list = $("dexList");
+  $("dexHint").textContent = DEX_HINT;
   $("dexCount").textContent = `${found.size}/${MORPHS.length}`;
   list.innerHTML = "";
   MORPHS.forEach((m, i) => {
@@ -2169,9 +2209,219 @@ function renderDex() {
     // 이름은 아이가 입력한 글자라 textContent로
     cap.querySelector("small").textContent = known ? `처음 만난 게코: ${found.get(m.key)}` : "알에서 만날 수 있어요";
     card.append(img, cap);
+    // v0.35.0: 앨범에 남은(예전에 키운) 게코는 놀러 오라고 부를 수 있다
+    if (known && friendIn(m.key)) {
+      const b = document.createElement("button");
+      const came = friendCame(m.key);
+      b.className = "dex-call";
+      b.disabled = came;
+      b.textContent = came ? "오늘 놀았어요 💛" : "🎈 놀러 와!";
+      b.addEventListener("click", () => callFriend(m.key, found.get(m.key)));
+      card.appendChild(b);
+    }
     list.appendChild(card);
   });
 }
+
+// ---- 도감 친구 놀러 오기 (v0.35.0) ----
+// 예전에 키운 게코가 사육장에 놀러 와서 같이 논다. 밥·돌봄 없이 놀기만 하고 행복이 올라간다.
+// 친구마다 하루에 한 번만 올 수 있다 (많이 키워서 도감을 채울수록 부를 친구가 많아진다).
+const FRIEND_HAPPY = 20;
+const FRIEND_W = 50; // #friend 너비(방 너비 %)
+const friendIn = (key) => state.history.some((h) => morphOf(h.morph).key === key);
+function friendToday() {
+  if (state.friendDay !== today()) { state.friendDay = today(); state.friendCalled = []; }
+  return state.friendCalled;
+}
+const friendCame = (key) => friendToday().includes(key);
+
+function dexMsg(text) {
+  $("dexHint").textContent = text;
+  sfx("nope");
+}
+
+let visit = null; // { el, bubble, x, face, timers, raf }
+function callFriend(key, name) {
+  if (visit || friendCame(key)) return;
+  if (stage().key === "egg") return dexMsg("알에서 깨어나면 친구를 부를 수 있어요 🥚");
+  if (state.sleeping) return dexMsg(`${state.name}${josa(state.name, "이", "가")} 자고 있어요. 깨운 다음에 불러요 💤`);
+  closeAlbum();
+  startVisit(key, name);
+}
+
+function startVisit(key, name) {
+  busy = true;
+  clearTimeout(wanderTimer);
+  stopWalk();
+  $("pet").classList.remove("inhide");
+  friendToday().push(key);
+  bump("friendVisit");
+  save();
+  render(); // 다른 버튼을 잠근다 (busy)
+
+  const el = document.createElement("div");
+  el.id = "friend";
+  const img = document.createElement("img");
+  img.src = morphDir(key) + "adult_happy.png";
+  img.alt = name;
+  img.draggable = false;
+  img.onerror = () => { // 그림이 없으면 SVG 도마뱀으로
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 200 140");
+    svg.setAttribute("preserveAspectRatio", "xMidYMax meet");
+    svg.innerHTML = lizardSvg(STAGES[STAGES.length - 1], "happy");
+    img.replaceWith(svg);
+  };
+  el.appendChild(img);
+  const bubble = document.createElement("div");
+  bubble.id = "friendBubble";
+  $("room").insertBefore(el, $("pet")); // 지금 게코보다 뒤에
+  $("room").appendChild(bubble);
+  visit = { el, bubble, x: 102, face: -1, timers: [], name };
+  friendPlace(102, -1);
+
+  const fsay = (text) => { bubble.textContent = text; };
+  const at = (ms, fn) => visit.timers.push(setTimeout(fn, ms));
+  const heartsBetween = (n) => {
+    for (let i = 0; i < n; i++) {
+      at(i * 220, () => {
+        const mid = (petX + 27.5 + visit.x + FRIEND_W / 2) / 2;
+        const h = spawn("rise-fx", ["💛", "💚", "💗", "✨"][i % 4], mid + (Math.random() - 0.5) * 16, 52 + Math.random() * 12);
+        setTimeout(() => h.remove(), 1800);
+      });
+    }
+  };
+  const pal = `${name}${josa(name, "이", "가")}`;
+
+  // 1) 친구가 오른쪽에서 걸어 들어오고, 지금 게코는 왼쪽에서 친구를 본다
+  say("누가 놀러 왔나 봐요! 👀");
+  sfx("start");
+  const s1 = Math.max(friendWalk(40, 20), faceTo(4, 1));
+  // 2) 인사
+  at(s1 * 1000 + 200, () => {
+    fsay(`안녕 ${state.name}! 놀러 왔어 🎈`);
+    sfx("chirp");
+    say(`${pal} 왔어요! 반가워요 💛`);
+    heartsBetween(4);
+  });
+  // 3) 같이 놀기: 서로 쫓아다니며 폴짝폴짝 (열 번, 한 번에 3초)
+  const PLAY = [
+    [`${state.name}, 나 잡아 봐라~`, "기다려~ 같이 가요!"],
+    ["여기 모래 따뜻하다!", `${name}${josa(name, "이랑", "랑")} 노니까 너무 좋아요!`],
+    ["우리 꼬리 흔들기 하자!", "살랑살랑~ 🎵"],
+    ["이번엔 내가 술래!", "꺄~ 도망가자! 🏃"],
+    ["누가 더 높이 뛰나 해 보자!", "폴짝! 내가 더 높아요!"],
+    ["저기 귀뚜라미 소리 들려?", "쉿... 살금살금 👀"],
+    ["혀 날름 대회 하자!", "날름날름~ 👅"],
+    ["돌 위에 올라가 볼까?", "영차영차! 🪨"],
+    ["우리 같이 끽끽 노래하자!", "끽끽~ 끽끽~ 🎶"],
+    ["마지막으로 한 바퀴 더!", "좋아요! 한 바퀴 더~"],
+  ];
+  let t = s1 * 1000 + 2600;
+  PLAY.forEach(([fLine, pLine], i) => {
+    at(t, () => {
+      $("room").classList.add("friend-play");
+      const right = i % 2 === 0; // 번갈아 자리를 바꾼다
+      const fx = right ? 8 + Math.random() * 8 : 36 + Math.random() * 8;
+      const px = right ? 30 + Math.random() * 10 : 0 + Math.random() * 6;
+      friendWalk(fx, 16);
+      setTimeout(() => { if (visit) walkTo(px, 14); }, 350);
+      fsay(fLine);
+      sfx("chirp");
+      setTimeout(() => { if (visit) say(pLine); }, 900);
+      heartsBetween(3);
+      state.happy = clamp(state.happy + FRIEND_HAPPY / PLAY.length);
+      renderBars();
+    });
+    t += 3000;
+  });
+  // 4) 마주 보고 인사하고 돌아간다
+  at(t, () => {
+    $("room").classList.remove("friend-play");
+    const pf = visit.x > petX ? 1 : -1;
+    facing = pf;
+    $("pet").style.setProperty("--face", facing);
+    friendPlace(visit.x, -pf);
+    fsay("재밌었어! 또 불러 줘 👋");
+    say(`잘 가 ${name}! 또 놀자 💛`);
+    sfx("yay");
+    sparkle(8, petX + 27.5, 55, 20);
+  });
+  at(t + 2200, () => {
+    bubble.textContent = "";
+    const s = friendWalk(112, 22);
+    at(s * 1000 + 100, endVisit);
+  });
+}
+
+// 친구를 x(방 너비 %)에 face 방향으로 놓는다 (움직임 없이)
+function friendPlace(x, face) {
+  const el = visit.el;
+  el.style.transition = "none";
+  el.style.left = x + "%";
+  el.style.setProperty("--face", face);
+  visit.x = x;
+  visit.face = face;
+}
+// 친구가 x까지 걸어간다. 걸리는 시간(초)
+function friendWalk(x, speed) {
+  const el = visit.el, dist = Math.abs(x - visit.x);
+  if (dist < 1) return 0;
+  const sec = dist / speed;
+  visit.face = x > visit.x ? 1 : -1;
+  void el.offsetWidth; // 놓인 자리에서부터 걷기 시작하게
+  el.style.transition = `left ${sec}s linear`;
+  el.style.left = x + "%";
+  el.style.setProperty("--face", visit.face);
+  el.classList.add("walking");
+  visit.x = x;
+  const v = visit;
+  setTimeout(() => { if (visit === v) el.classList.remove("walking"); }, sec * 1000);
+  return sec;
+}
+// 지금 게코가 x로 걸어간 뒤 dir 방향을 본다
+function faceTo(x, dir) {
+  const sec = walkTo(x, 8);
+  visit.timers.push(setTimeout(() => {
+    facing = dir;
+    $("pet").style.setProperty("--face", facing);
+  }, sec * 1000 + 50));
+  return sec;
+}
+
+function endVisit() {
+  if (!visit) return;
+  visit.timers.forEach(clearTimeout);
+  visit.el.remove();
+  visit.bubble.remove();
+  $("room").classList.remove("friend-play");
+  visit = null;
+  tick();
+  busy = false;
+  save();
+  render();
+  say(`${state.name}${josa(state.name, "은", "는")} 친구랑 놀아서 행복해요! 😊 행복 +${FRIEND_HAPPY}`);
+  wander();
+}
+
+// 친구 말풍선은 친구 머리 위를 따라간다
+(function friendBubbleLoop() {
+  if (visit && visit.bubble.textContent && !document.hidden) {
+    const b = visit.bubble, room = $("room"), rr = room.getBoundingClientRect(), r = visit.el.getBoundingClientRect();
+    if (rr.width && b.offsetWidth) {
+      const size = Math.min(r.width, r.height);
+      const u = visit.face > 0 ? 0.78 : 0.22; // 머리는 그림 오른쪽(왼쪽을 보면 왼쪽)
+      const x = (r.left + (r.width - size) / 2 + size * u - rr.left) / rr.width * 100;
+      const y = (r.bottom - size * 0.72 - rr.top) / rr.height * 100;
+      const bw = b.offsetWidth / rr.width * 100, bh = b.offsetHeight / rr.height * 100;
+      const cx = Math.max(bw / 2 + 1, Math.min(100 - bw / 2 - 1, x));
+      b.style.left = cx.toFixed(2) + "%";
+      b.style.top = Math.max(bh + 2, Math.min(96, y)).toFixed(2) + "%";
+      b.style.setProperty("--tail", Math.max(-b.offsetWidth / 2 + 14, Math.min(b.offsetWidth / 2 - 14, (x - cx) / 100 * rr.width)).toFixed(1) + "px");
+    }
+  }
+  requestAnimationFrame(friendBubbleLoop);
+})();
 
 function showAlbumTab(dex) {
   $("photoView").hidden = dex;
