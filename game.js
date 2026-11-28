@@ -151,7 +151,7 @@ function newState() {
            mathSkill: {}, mathWrong: [], treats: 0, spellWrong: [], checkDay: "", checks: [], checkDone: false, checkStreak: 0, checkLast: "",
            humidity: 45, shedPhase: "none", shedFor: "", shedWet: 0,
            stats: {}, decor: [], decorGot: [], decorSeen: [], coins: 0, upgrades: {},
-           friendDay: "", friendCalled: [],
+           friendLast: {},
            gen: 1, history: [], morph: null, born: now, last: now };
 }
 
@@ -177,8 +177,9 @@ function fromSave(s) {
   if (typeof st.coins !== "number" || !(st.coins >= 0)) st.coins = 0;
   if (!st.upgrades || typeof st.upgrades !== "object" || Array.isArray(st.upgrades)) st.upgrades = {};
   // 친구 부르기가 없던 저장본
-  if (!Array.isArray(st.friendCalled)) st.friendCalled = [];
-  if (typeof st.friendDay !== "string") st.friendDay = "";
+  // v0.36.0: 하루 한 번 → 친구마다 6시간 쿨타임 (friendLast: 모프 key → 마지막으로 놀러 온 시각)
+  if (!st.friendLast || typeof st.friendLast !== "object" || Array.isArray(st.friendLast)) st.friendLast = {};
+  delete st.friendDay; delete st.friendCalled;
   return st;
 }
 
@@ -2135,7 +2136,7 @@ function layEgg() {
     lampOn: state.lampOn, fanOn: state.fanOn, temp: state.temp, water: state.water, humidity: state.humidity,
     stats: state.stats, decor: state.decor, decorGot: state.decorGot, decorSeen: state.decorSeen, // 꾸민 사육장은 그대로
     coins: state.coins, upgrades: state.upgrades, // 코인과 업그레이드한 사육장도 그대로
-    friendDay: state.friendDay, friendCalled: state.friendCalled, // 오늘 놀러 온 친구도 그대로
+    friendLast: state.friendLast, // 친구 쿨타임도 그대로
   };
   state = Object.assign(newState(), keep);
   save();
@@ -2212,10 +2213,10 @@ function renderDex() {
     // v0.35.0: 앨범에 남은(예전에 키운) 게코는 놀러 오라고 부를 수 있다
     if (known && friendIn(m.key)) {
       const b = document.createElement("button");
-      const came = friendCame(m.key);
+      const wait = friendWait(m.key);
       b.className = "dex-call";
-      b.disabled = came;
-      b.textContent = came ? "오늘 놀았어요 💛" : "🎈 놀러 와!";
+      b.disabled = wait > 0;
+      b.textContent = wait > 0 ? `💛 ${waitText(wait)} 뒤에 또 와요` : "🎈 놀러 와!";
       b.addEventListener("click", () => callFriend(m.key, found.get(m.key)));
       card.appendChild(b);
     }
@@ -2225,15 +2226,20 @@ function renderDex() {
 
 // ---- 도감 친구 놀러 오기 (v0.35.0) ----
 // 예전에 키운 게코가 사육장에 놀러 와서 같이 논다. 밥·돌봄 없이 놀기만 하고 행복이 올라간다.
-// 친구마다 하루에 한 번만 올 수 있다 (많이 키워서 도감을 채울수록 부를 친구가 많아진다).
+// v0.36.0: 친구마다 6시간에 한 번 올 수 있다 (하루에 3~4번). 도감을 채울수록 부를 친구가 많아진다.
 const FRIEND_HAPPY = 20;
 const FRIEND_W = 50; // #friend 너비(방 너비 %)
+const FRIEND_COOL = 6 * 3600 * 1000;
 const friendIn = (key) => state.history.some((h) => morphOf(h.morph).key === key);
-function friendToday() {
-  if (state.friendDay !== today()) { state.friendDay = today(); state.friendCalled = []; }
-  return state.friendCalled;
+// 다시 부를 수 있을 때까지 남은 ms (0이면 지금 부를 수 있다)
+function friendWait(key) {
+  const last = state.friendLast[key] || 0;
+  return Math.max(0, last + FRIEND_COOL - Date.now());
 }
-const friendCame = (key) => friendToday().includes(key);
+function waitText(ms) {
+  const min = Math.ceil(ms / 60000), h = Math.floor(min / 60), m = min % 60;
+  return h ? (m ? `${h}시간 ${m}분` : `${h}시간`) : `${m}분`;
+}
 
 function dexMsg(text) {
   $("dexHint").textContent = text;
@@ -2242,7 +2248,7 @@ function dexMsg(text) {
 
 let visit = null; // { el, bubble, x, face, timers, raf }
 function callFriend(key, name) {
-  if (visit || friendCame(key)) return;
+  if (visit || friendWait(key) > 0) return;
   if (stage().key === "egg") return dexMsg("알에서 깨어나면 친구를 부를 수 있어요 🥚");
   if (state.sleeping) return dexMsg(`${state.name}${josa(state.name, "이", "가")} 자고 있어요. 깨운 다음에 불러요 💤`);
   closeAlbum();
@@ -2254,7 +2260,7 @@ function startVisit(key, name) {
   clearTimeout(wanderTimer);
   stopWalk();
   $("pet").classList.remove("inhide");
-  friendToday().push(key);
+  state.friendLast[key] = Date.now();
   bump("friendVisit");
   save();
   render(); // 다른 버튼을 잠근다 (busy)
